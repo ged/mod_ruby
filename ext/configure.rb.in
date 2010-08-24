@@ -186,8 +186,7 @@ $DEFFILE = "mod_ruby-#{$arch}.def" if /(ms|bcc)win32|mingw32/ =~ RUBY_PLATFORM
 AC_SUBST("DEFFILE")
 
 AC_OUTPUT("Makefile",
-	  "libruby.module",
-	  "doc/Makefile")
+	  "libruby.module")
 
 open("mod_ruby-#{$arch}.def", "w") do |file|
   file.print ""

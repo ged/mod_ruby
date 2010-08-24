@@ -1,0 +1,9 @@
+\.bundle$
+\.o$
+^tmp/
+hostkey.rsa
+^\.yardoc
+docs/api
+ChangeLog
+\.DS_Store
+^hostid.rsa$
