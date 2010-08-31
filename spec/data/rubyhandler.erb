@@ -4,16 +4,6 @@ require 'spechandler'
 # The 'RubyHandler' spec wrapper
 class RubyHandler < Apache::SpecHandler
 
-	def handler( req )
-		mname = req.uri[1..-1]
-		self.method( "handle_#{mname}" ).call( req )
-	rescue NoMethodError
-		req.server.log_error "Unexpected uri %p" % [ req.path_info ]
-		exit Apache::SERVER_ERROR
-	else
-		return Apache::OK
-	end
-
 <% firstindent = code[/\A(\s*)/, 1] %>
 <%= code.gsub( /^#{firstindent}/, "\t" ) %>
 
