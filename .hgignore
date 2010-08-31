@@ -7,3 +7,5 @@ docs/api
 ChangeLog
 \.DS_Store
 ^hostid.rsa$
+^tmp_test_specs/
+^spec\.log$
