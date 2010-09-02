@@ -9,3 +9,5 @@ ChangeLog
 ^hostid.rsa$
 ^tmp_test_specs/
 ^spec\.log$
+ext/Makefile
+ext/mod_ruby\.so

@@ -1,0 +1,12 @@
+*.bundle
+*.o
+tmp/
+.yardoc
+docs/api/
+ChangeLog
+**/.DS_Store
+tmp_test_specs/
+spec.log
+ext/Makefile
+ext/mod_ruby.so
+
