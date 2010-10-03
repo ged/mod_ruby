@@ -10,3 +10,4 @@ spec.log
 ext/Makefile
 ext/mod_ruby.so
 
+pkg/
