@@ -78,7 +78,7 @@ module Apache
 					raise "the %p executable was not found in your PATH" % [ program ]
 				PROGRAM_PATHS[ program ] = path
 			end
-			return PROGRAM_PATHS[ program ]
+			return PROGRAM_PATHS[ program ].to_s
 		end
 
 
@@ -187,9 +187,9 @@ module Apache
 
 		### Get the version string from Apache.
 		def get_apache_version
-			httpd = which( 'httpd' )
+			httpd = which( 'httpd' ).to_s
 			version_output  = IO.read('|-') or exec httpd, '-v'
-			$stderr.puts "version output: \n#{version_output.inspect}"
+			trace "version output: \n#{version_output.inspect}"
 			return version_output[ %r{Server version: Apache/(\d+\.\d+\.\d+)}, 1 ].
 				split('.').collect {|char| char.to_i }.pack('N*')
 		end
@@ -199,7 +199,7 @@ module Apache
 		### testing directories from previous tests, and tell any Apache instances
 		### running in them to shut down.
 		def stop_existing_servers
-			httpd = which( 'httpd' )
+			httpd = which( 'httpd' ).to_s
 			pat = Pathname.getwd + 'tmp_test_*'
 			Pathname.glob( pat.to_s ).each do |testdir|
 				datadir = testdir + 'data'
@@ -251,7 +251,8 @@ module Apache
 			# Start the server
 			httpd = which( 'httpd' )
 			trace "Running Apache like: '#{httpd} -f #{CONFIGFILE} -e debug -X'"
-			@pid = log_and_run @logfile, httpd, '-f', CONFIGFILE, '-e', 'debug', '-k', 'start'
+			@pid = log_and_run @logfile, httpd.to_s, '-f', CONFIGFILE.to_s,
+				'-e', 'debug', '-k', 'start'
 
 			# Now wait for it to spin up, trying a connection once every 0.1s
 			trace "Testing apache running as PID %d on port %d; waiting for it to spin up..." %
@@ -333,5 +334,192 @@ module Apache
 	end # module SpecHelpers
 
 
+	# A collection of methods to add to Numeric for convenience and
+	# readability when calculating times and byte sizes.
+	module NumericConstantMethods
+
+		### A collection of convenience methods for calculating times using
+		### Numeric objects:
+		###
+		###   # Add convenience methods to Numeric objects
+		###   class Numeric
+		###       include ThingFish::NumericConstantMethods::Time
+		###   end
+		###
+		###   irb> 138.seconds.ago
+		###       ==> Fri Aug 08 08:41:40 -0700 2008
+		###   irb> 18.years.ago
+		###       ==> Wed Aug 08 20:45:08 -0700 1990
+		###   irb> 2.hours.before( 6.minutes.ago )
+		###       ==> Fri Aug 08 06:40:38 -0700 2008
+		###
+		module Time
+
+			### Number of seconds (returns receiver unmodified)
+			def seconds
+				return self
+			end
+			alias_method :second, :seconds
+
+			### Returns number of seconds in <receiver> minutes
+			def minutes
+				return self * 60
+			end
+			alias_method :minute, :minutes
+
+			### Returns the number of seconds in <receiver> hours
+			def hours
+				return self * 60.minutes
+			end
+			alias_method :hour, :hours
+
+			### Returns the number of seconds in <receiver> days
+			def days
+				return self * 24.hours
+			end
+			alias_method :day, :days
+
+			### Return the number of seconds in <receiver> weeks
+			def weeks
+				return self * 7.days
+			end
+			alias_method :week, :weeks
+
+			### Returns the number of seconds in <receiver> fortnights
+			def fortnights
+				return self * 2.weeks
+			end
+			alias_method :fortnight, :fortnights
+
+			### Returns the number of seconds in <receiver> months (approximate)
+			def months
+				return self * 30.days
+			end
+			alias_method :month, :months
+
+			### Returns the number of seconds in <receiver> years (approximate)
+			def years
+				return (self * 365.25.days).to_i
+			end
+			alias_method :year, :years
+
+
+			### Returns the Time <receiver> number of seconds before the
+			### specified +time+. E.g., 2.hours.before( header.expiration )
+			def before( time )
+				return time - self
+			end
+
+
+			### Returns the Time <receiver> number of seconds ago. (e.g.,
+			### expiration > 2.hours.ago )
+			def ago
+				return self.before( ::Time.now )
+			end
+
+
+			### Returns the Time <receiver> number of seconds after the given +time+.
+			### E.g., 10.minutes.after( header.expiration )
+			def after( time )
+				return time + self
+			end
+
+			# Reads best without arguments:  10.minutes.from_now
+			def from_now
+				return self.after( ::Time.now )
+			end
+		end # module Time
+
+
+		### A collection of convenience methods for calculating bytes using
+		### Numeric objects:
+		###
+		###   # Add convenience methods to Numeric objects
+		###   class Numeric
+		###       include ThingFish::NumericConstantMethods::Bytes
+		###   end
+		###
+		###   irb> 14.megabytes
+		###       ==> 14680064
+		###   irb> 188.gigabytes
+		###       ==> 201863462912
+		###   irb> 177263661663.size_suffix
+		###       ==> "165.1G"
+		###
+		module Bytes
+
+			# Bytes in a Kilobyte
+			KILOBYTE = 1024
+
+			# Bytes in a Megabyte
+			MEGABYTE = 1024 ** 2
+
+			# Bytes in a Gigabyte
+			GIGABYTE = 1024 ** 3
+
+
+			### Number of bytes (returns receiver unmodified)
+			def bytes
+				return self
+			end
+			alias_method :byte, :bytes
+
+			### Returns the number of bytes in <receiver> kilobytes
+			def kilobytes
+				return self * 1024
+			end
+			alias_method :kilobyte, :kilobytes
+
+			### Return the number of bytes in <receiver> megabytes
+			def megabytes
+				return self * 1024.kilobytes
+			end
+			alias_method :megabyte, :megabytes
+
+			### Return the number of bytes in <receiver> gigabytes
+			def gigabytes
+				return self * 1024.megabytes
+			end
+			alias_method :gigabyte, :gigabytes
+
+			### Return the number of bytes in <receiver> terabytes
+			def terabytes
+				return self * 1024.gigabytes
+			end
+			alias_method :terabyte, :terabytes
+
+			### Return the number of bytes in <receiver> petabytes
+			def petabytes
+				return self * 1024.terabytes
+			end
+			alias_method :petabyte, :petabytes
+
+			### Return the number of bytes in <receiver> exabytes
+			def exabytes
+				return self * 1024.petabytes
+			end
+			alias_method :exabyte, :exabytes
+
+			### Return a human readable file size.
+			def size_suffix
+				bytes = self.to_f
+				return case
+					when bytes >= GIGABYTE then sprintf( "%0.1fG", bytes / GIGABYTE )
+					when bytes >= MEGABYTE then sprintf( "%0.1fM", bytes / MEGABYTE )
+					when bytes >= KILOBYTE then sprintf( "%0.1fK", bytes / KILOBYTE )
+					else "%db" % [ self ]
+					end
+			end
+
+		end # module Bytes
+
+	end # module NumericConstantMethods
+
 end # module Apache
+
+
+class Numeric
+	include Apache::NumericConstantMethods::Time,
+	        Apache::NumericConstantMethods::Bytes
+end
 

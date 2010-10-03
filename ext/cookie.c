@@ -146,7 +146,7 @@ static VALUE cookie_values( VALUE self )
     }
 
     return items;
-	
+
 }
 
 
@@ -160,7 +160,7 @@ static VALUE cookie_stringify_push( VALUE val, VALUE ary )
     return ary;
 }
 
-    
+
 /*
  * value=( newval )
  * --
@@ -208,7 +208,7 @@ static VALUE cookie_domain( VALUE self )
         return rb_tainted_str_new2( cookie->domain );
 }
 
-    
+
 /*
  * domain=( newdomain )
  * --
@@ -233,7 +233,7 @@ static VALUE cookie_path( VALUE self )
     return rb_tainted_str_new2( cookie->path );
 }
 
-    
+
 /*
  * path=( newpath )
  * --
@@ -280,7 +280,7 @@ static VALUE cookie_expires( VALUE self )
 static VALUE cookie_expires_eq( VALUE self, VALUE expiration )
 {
     ApacheCookie *cookie = get_cookie( self );
-    
+
     if ( rb_obj_is_kind_of(expiration, rb_cTime) ) {
         expiration = rb_funcall( expiration, rb_intern("gmtime"), 0 );
         expiration = rb_funcall( expiration, rb_intern("strftime"),
@@ -303,7 +303,7 @@ static VALUE cookie_secure( VALUE self )
     return cookie->secure ? Qtrue : Qfalse;
 }
 
-    
+
 /*
  * secure=( bool )
  * --
@@ -394,7 +394,7 @@ static VALUE cookie_init( int argc, VALUE *argv, VALUE self )
         ApacheCookie *ptr;
         request_rec *r;
         VALUE request, attrs;
-    
+
         /* Read arguments, making sure the second one is a Hash if given */
         if ( rb_scan_args(argc, argv, "11", &request, &attrs) == 2 ) {
             Check_Type( attrs, T_HASH );
@@ -418,11 +418,11 @@ static VALUE cookie_init( int argc, VALUE *argv, VALUE self )
     else {
         rb_raise( rb_eArgError, "Cannot re-initialize Apache::Cookie object." );
     }
-    
+
     return self;
 }
 
-    
+
 /*
  * bake
  * --
@@ -474,7 +474,7 @@ void rb_init_apache_cookie()
     id_path		= rb_intern( "path" );
     id_secure	= rb_intern( "secure" );
 
-    cookie_date_format = rb_str_new2( "%A, %d-%b-%Y %H:%M:%S GMT" );
+    cookie_date_format = rb_str_new2( "%a, %d-%b-%Y %H:%M:%S GMT" );
 
     /* Kluge to make Rdoc see the associations in this file */
 #if FOR_RDOC_PARSER

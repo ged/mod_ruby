@@ -40,7 +40,7 @@ module Apache
 						raise NameError, "Unknown request verb %p" % [ self.verb ]
 					trace "Sending a %p to the server..." % [ req_class ]
 
-					self.request = req_class.new( self.path )
+					self.request = req_class.new( self.path, self.headers )
 					trace "  request is: %p" % [ self.request ]
 
 					http = Net::HTTP.new( self.host, self.port )
@@ -72,11 +72,13 @@ module Apache
 		#
 
 		# Match response status
-		class StatusMatcher
+		class ResponseMatcher
 
 			### Create a new matcher for the given +regexp+
 			def initialize( status_code )
 				@expected_code       = status_code
+				@expected_headers    = []
+				@expected_body       = nil
 				@failure_description = nil
 				@agent               = nil
 			end
@@ -90,8 +92,24 @@ module Apache
 			def matches?( agent )
 				self.agent = agent
 
-				return true if self.check_status_match( agent.response )
+				return true if self.check_status_match( agent.response ) &&
+					self.check_header_matches( agent.response ) &&
+					self.check_body_match( agent.response )
 				return false
+			end
+
+
+			### Chainable response header matcher.
+			def and_header( header, value )
+				@expected_headers << [ header, value ]
+				return self
+			end
+
+
+			### Chainable response body matcher.
+			def and_body( content )
+				@expected_body = content
+				return self
 			end
 
 
@@ -105,6 +123,56 @@ module Apache
 				end
 
 				return true
+			end
+
+
+			### Check the headers of the +response+ against any expected header values.
+			def check_header_matches( response )
+				@expected_headers.each do |name, expected_value|
+					unless response.header.key?( name )
+						self.failure_description = "have a %p header" % [ name ]
+						break false
+					end
+
+					if expected_value.is_a?( Regexp )
+						unless response.header[ name ] =~ expected_value
+							self.failure_description = "have a %p header matching %p" %
+								[ name, expected_value ]
+							break false
+						end
+
+					else
+						unless response.header[ name ] == expected_value.to_s
+							self.failure_description = "have a %p header equal to %p" %
+								[ name, expected_value ]
+								break false
+						end
+
+					end
+				end
+			end
+
+
+			### Check the body of the specified +response+ against the @expected_body.
+			def check_body_match( response )
+				return case @expected_body
+				when NilClass
+					# Don't care what the body is
+					return true
+				when ''
+					self.failure_description = "have an empty body"
+					response.body.nil?
+				when Regexp
+					self.failure_description =
+						"have a body that matches:\n\n  %p\n\n" % [ @expected_body ]
+					response.body =~ @expected_body
+				when String
+					self.failure_description =
+						"have a body that equals:\n\n  %p\n\n" % [ @expected_body ]
+					response.body.strip == @expected_body
+				else
+					raise "don't know how to match the response body to %p" % [ @expected_body ]
+				end
 			end
 
 
@@ -157,50 +225,7 @@ module Apache
 				return buf
 			end
 
-		end # class StatusMatcher
-
-
-		### A matcher that matches a status *and* body content.
-		class ContentMatcher < StatusMatcher
-
-			#################################################################
-			###	I N S T A N C E   M E T H O D S
-			#################################################################
-
-			### Create a new ContentMatcher
-			def initialize( status_code, content )
-				super( status_code )
-				@expected_content = content
-			end
-
-			### Returns true if the status and content of the response negotiated by the given 
-			### +agent+ matches the expected one.
-			def matches?( agent )
-				return true if super && self.check_body_match( agent.response )
-				return false
-			end
-
-
-			### Check the body of the specified +response+ against the @expected_content.
-			def check_body_match( response )
-				return case @expected_content
-				when NilClass
-					self.failure_description = "have an empty body"
-					response.body.nil?
-				when Regexp
-					self.failure_description =
-						"have a body that matches:\n\n  %p\n\n" % [ @expected_content ]
-					response.body =~ @expected_content
-				when String
-					self.failure_description =
-						"have a body that equals:\n\n  %p\n\n" % [ @expected_content ]
-					response.body.strip == @expected_content
-				else
-					raise "don't know how to match the response body to %p" % [ @expected_content ]
-				end
-			end
-
-		end # class ContentMatcher
+		end # class ResponseMatcher
 
 
 		#
@@ -209,28 +234,21 @@ module Apache
 
 		### Make a HTTPAgent that will send a GET request for the given +path+ to the current
 		### testing instance of Apache. 
-		def requesting( path )
-			return HTTPAgent.new( 'localhost', LISTEN_PORT, path )
+		def requesting( path, headers={} )
+			return HTTPAgent.new( 'localhost', LISTEN_PORT, path, :get, headers )
 		end
 
 
 		### Make a HTTPAgent that will send a POST request for the given +path+ to the current
 		### testing instance of Apache.
-		def posting_to( path )
-			return HTTPAgent.new( 'localhost', LISTEN_PORT, path, :post )
+		def posting_to( path, headers={} )
+			return HTTPAgent.new( 'localhost', LISTEN_PORT, path, :post, headers )
 		end
 
 
-		### Create a StatusMatcher that expects a response with the specified +status_code+.
-		def respond_with_status( status_code )
-			return StatusMatcher.new( status_code )
-		end
-
-
-		### Create a ContentMatcher that expects a response with the specified +status_code+ 
-		### and body.
-		def respond_with( status_code, body )
-			return ContentMatcher.new( status_code, body )
+		### Create a ContentMatcher that expects a response with the specified +status_code+.
+		def respond_with( status_code )
+			return ResponseMatcher.new( status_code )
 		end
 
 	end # module SpecMatchers

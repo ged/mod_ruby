@@ -6,12 +6,13 @@
 ServerRoot <%= BASEDIR %>
 Listen 127.0.0.1:<%= LISTEN_PORT %>
 AcceptMutex posixsem
+ServerName localhost
 
 LoadModule ruby_module ext/mod_ruby.so
 
-# LoadModule log_config_module /opt/local/apache2/modules/mod_log_config.so
-# LogFormat "%h %l %u %t \"%r\" %>s %b \"%{Referer}i\" \"%{User-Agent}i\"" combined
-# CustomLog <%= TEST_DATADIR + 'access.log' %> combined
+LoadModule log_config_module /opt/local/apache2/modules/mod_log_config.so
+LogFormat "%h %l %u %t \"%r\" %>s %b \"%{Referer}i\" \"%{User-Agent}i\"" combined
+CustomLog <%= TEST_DATADIR + 'access.log' %> combined
 
 ErrorLog <%= TEST_DATADIR + 'error.log' %>
 PidFile <%= TEST_DATADIR + 'httpd.pid' %>

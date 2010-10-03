@@ -93,44 +93,51 @@ describe Apache do
 
 	# exit
 	it "overrides Kernel::exit to allow fast status return from handlers" do
-		requesting( '/exit' ).should respond_with_status( BAD_REQUEST )
+		requesting( '/exit' ).should respond_with( BAD_REQUEST )
 	end
 
 
 	# Apache::server_version
 	it "knows what the server version it's running under is" do
-		requesting( '/server_version' ).should respond_with( HTTP_OK, %r{Apache/\d+\.\d+\.\d+} )
+		requesting( '/server_version' ).should respond_with( HTTP_OK ).
+			and_body( %r{Apache/\d+\.\d+\.\d+} )
 	end
 
 	# Apache::add_version_component
 	it "allows the addition of new components to the version string" do
 		pending "not implemented in Apache 2" if @apache_version >= vvec( '2.0.0' )
-		requesting( '/add_version_component' ).should respond_with( HTTP_OK, /sillycomponent/ )
+		requesting( '/add_version_component' ).should respond_with( HTTP_OK ).
+			and_body( /sillycomponent/ )
 	end
 
 	# Apache::server_built
 	it "knows the build details of the server it's running under" do
-		requesting( '/server_built' ).should respond_with( HTTP_OK, /\w{3} \d{1,2} \d{4} \d+:\d\d:\d\d/ )
+		requesting( '/server_built' ).should respond_with( HTTP_OK ).
+			and_body( /\w{3} \d{1,2} \d{4} \d+:\d\d:\d\d/ )
 	end
 
 	# Apache::request
 	it "knows what the current request object is for the server it's running under" do
-		requesting( '/request' ).should respond_with( HTTP_OK, /#<Apache::Request:0x[[:xdigit:]]+>/ )
+		requesting( '/request' ).should respond_with( HTTP_OK ).
+			and_body( /#<Apache::Request:0x[[:xdigit:]]+>/ )
 	end
 
 	# Apache::unescape_url
 	it "can unescape URLs" do
-		requesting( '/unescape_url' ).should respond_with( HTTP_OK, "make 'em pay" )
+		requesting( '/unescape_url' ).should respond_with( HTTP_OK ).
+			and_body( "make 'em pay" )
 	end
 
 	# Apache::chdir_file
 	it "can change the working directory of the current server to the directory a file lives in" do
-		requesting( '/chdir_file' ).should respond_with( HTTP_OK, Apache::SpecHelpers::TEST_DATADIR.to_s )
+		requesting( '/chdir_file' ).should respond_with( HTTP_OK ).
+			and_body( Apache::SpecHelpers::TEST_DATADIR.to_s )
 	end
 
 	# Apache::server_root
 	it "knows what the server root of the server it's running under is" do
-		requesting( '/server_root' ).should respond_with( HTTP_OK, Apache::SpecHelpers::BASEDIR.to_s )
+		requesting( '/server_root' ).should respond_with( HTTP_OK ).
+			and_body( Apache::SpecHelpers::BASEDIR.to_s )
 	end
 
 end
