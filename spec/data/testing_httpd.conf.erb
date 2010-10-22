@@ -22,10 +22,5 @@ RubyAddPath <%= EXTDIR %>
 RubyAddPath <%= SPEC_LIBDIR %>
 RubyRequire <%= HANDLER_RB %>
 
-<% handler_name = handler_class.name.sub(/^#<Module:0x[[:xdigit:]]+>::/, '') %>
-<Location <%= handler_class.uri || '/' %>>
-	SetHandler ruby-object
-	# <%= handler_class.inspect %>
-	<%= handler_name %> <%= handler_name %>.new
-</Location>
+Include <%= TEST_DATADIR + 'handlers.conf' %>
 

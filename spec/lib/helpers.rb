@@ -9,6 +9,91 @@ module Apache
 
 	require 'spec/lib/spechandler'
 
+	class HandlerConfig
+
+		# The name of the config that gets included into the testing server's 
+		# boilerplate config
+		CONFIG_INCLUDE_FILE = 'handlers.conf'
+
+
+		### Create a new handler configuration, then call the given +block+ in 
+		### the context of the new object.
+		def initialize( configdir, &block )
+			@configdir = Pathname( configdir )
+			@handlers = Hash.new do |h,k|
+				h[k] = []
+			end
+			@handler_counter = 0
+
+			case block.arity
+			when -1, 0
+				self.instance_eval( &block )
+			else
+				block.call( self )
+			end
+		end
+
+
+		attr_reader :configdir, :handlers
+
+
+		### Install a RubyHandler at the specified +url+ with the body of the
+		### #handle method containing the specified +code+.
+		def rubyhandler( url, code )
+			self.handlers[ :rubyhandler ] << [ url, code ]
+		end
+
+
+		### Write the configured handlers to the CONFIG_INCLUDE_FILE.
+		def generate_handlers
+			path = @configdir + CONFIG_INCLUDE_FILE
+			config = self.generate_handler_config
+			path.open( 'w', 0644 ) do |fh|
+				fh.print( config )
+			end
+		end
+
+
+		### Generate the Apache config for any handlers which have been defined 
+		### and return it as a String.
+		def generate_handler_config
+			config = ''
+			self.handlers.each do |handlertype, config|
+				config << self.send( "write_#{handlertype}", *config )
+			end
+
+			return config
+		end
+
+
+		### Write out the Ruby source for the specified RubyHandler, and return the config
+		### that points to it.
+		def write_rubyhandler( url, code )
+			@handler_counter += 1
+			handlerfile = @configdir + "rubyhandler%d.rb" % [ @handler_counter ]
+			handlerclass = "TestRubyHandler%d" % [ @handler_counter ]
+
+			handlerfile.open( 'w', 0644 ) do |fh|
+				fh.puts <<-EO_CLASS
+					class #{handlerclass}
+						def handler( request )
+							#{code}
+						end
+					end
+				EO_CLASS
+			end
+
+			return %{
+				RubyRequire #{handlerfile}
+				<Location #{url}>
+					RubyHandler #{handlerclass}
+				</Location>
+			}
+		end
+
+	end # class HandlerConfig
+
+
 	module SpecHelpers
 
 		BASEDIR             = Pathname( __FILE__ ).expand_path.dirname.parent.parent
@@ -249,10 +334,7 @@ module Apache
 			end
 
 			# Start the server
-			httpd = which( 'httpd' )
-			trace "Running Apache like: '#{httpd} -f #{CONFIGFILE} -e debug -X'"
-			@pid = log_and_run @logfile, httpd.to_s, '-f', CONFIGFILE.to_s,
-				'-e', 'debug', '-k', 'start'
+			@pid = apache_cmd( 'start' )
 
 			# Now wait for it to spin up, trying a connection once every 0.1s
 			trace "Testing apache running as PID %d on port %d; waiting for it to spin up..." %
@@ -273,18 +355,20 @@ module Apache
 		end
 
 
+		### Run the given 'httpd' command with the correct config file and flags.
+		def apache_cmd( command )
+			httpd = which( 'httpd' )
+			pid = log_and_run @logfile, httpd, '-f', CONFIGFILE, '-e', 'debug', '-k', command
+			Process.waitpid( pid )
+			return pid
+		end
+
+
 		### Stop a running testing Apache instance
 		def teardown_testing_apache
-			httpd = which( 'httpd' )
 			raise "No pid was set." unless @pid
 			log "Tearing down test httpd at PID #@pid"
-
-			log_and_run @logfile, httpd, '-f', CONFIGFILE, '-e', 'debug', '-k', 'stop'
-			# Process.kill( :TERM, @pid )
-			# killed_pid = Process.wait
-			# log "  reaped pid #{killed_pid}"
-			# pidfile = TEST_DATADIR + 'httpd.pid'
-			# pidfile.unlink if pidfile.exist?
+			apache_cmd( 'stop' )
 		end
 
 
@@ -296,40 +380,13 @@ module Apache
 		end
 
 
-		### Reset the logs. Currently doesn't do anything, but will eventually tear down 
-		### anything set up by setup_logging().
-		def reset_logging
+		### Set up one or more handlers in the +block+ and then gracefully restart the testing
+		### Apache.
+		def install_handlers( &block )
+			handlerconfig = HandlerConfig.new( &block )
+			handlerconfig.generate_handlers
+			apache_cmd( 'graceful' )
 		end
-
-
-		### Write out the handler file by expanding it inside an ERB template.
-		def write_handler_file( code )
-			HANDLER_RB.dirname.mkpath
-			HANDLER_RB.open( 'w' ) do |fh|
-				fh.write( code )
-			end
-			return HANDLER_RB
-		end
-
-
-		#
-		# Handler definition functions
-		#
-
-		### Write the source for a content handler (RubyHandler) to disk, then load it into
-		### the spec process too.
-		def RubyHandler( uri, code )
-			tmpl = load_template( SPEC_DATADIR + 'rubyhandler.erb' )
-			code = tmpl.result( binding() )
-			filename = write_handler_file( code )
-			Apache::SpecHandler.derivatives.clear
-			Kernel.load( filename, true )
-			new_handler = Apache::SpecHandler.derivatives.first
-			new_handler.uri = uri
-
-			return new_handler
-		end
-
 
 	end # module SpecHelpers
 

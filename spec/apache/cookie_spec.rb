@@ -42,81 +42,8 @@ describe Apache do
 
 	before( :all ) do
 		@apache_version = get_apache_version()
-
-		# Set up the handler
-		@handler = RubyHandler( '/', <<-"END_CODE" )
-
-			require 'digest/md5'
-
-			def handler( req )
-				cookie = case req.uri
-					when '/default_cookie'
-						Apache::Cookie.new( req )
-
-					when '/nameonly_cookie'
-						Apache::Cookie.new( req, :name => 'session_id' )
-
-					when '/plain_value_cookie'
-						sess_id = Digest::MD5.hexdigest( Time.at(1234567890).to_s + ':127.0.0.1' )
-						Apache::Cookie.new( req, :name => 'session_id', :value => sess_id )
-
-					when '/array_cookie'
-						values = #{ARRAY_COOKIE_VALUES.inspect}
-						Apache::Cookie.new( req, :name => 'search_tags', :value => values )
-
-					when '/fetch_first_value'
-						cookie = req.cookies['search_tags'] or
-							raise "No 'search_tags' cookie in the request!"
-						req.puts( cookie.value )
-
-					when '/fetch_all_values'
-						cookie = req.cookies['search_tags'] or
-							raise "No 'search_tags' cookie in the request!"
-						req.puts( cookie.values.join(';') )
-
-					when '/time_expiration'
-						expires = Time.at( 1234567890 )
-						Apache::Cookie.new( req,
-							:name => 'session', :value => "expire me!", :expires => expires )
-
-					when '/timestring_expiration'
-						expires = Time.at( 1234567890 )
-						Apache::Cookie.new( req,
-							:name => 'session', :value => "expire me!", :expires => expires )
-
-					# Allow the example to pass in the delta to be used
-					when %r{/delta_expiration/(.+)}
-						deltastring = $1
-						Apache::Cookie.new( req,
-							:name => 'session', :value => "expire me!", :expires => deltastring )
-
-					when '/long_cookie_value'
-						Apache::Cookie.new( req, :name => 'longvalue', :value => 'x' * 4000 )
-
-					when '/getset_domain'
-						cookie = req.cookies['session'] or
-							raise "No 'session' cookie in the request!"
-						cookie.domain = 'example.com'
-						req.puts( cookie.domain )
-
-					when '/domain_cookie'
-						Apache::Cookie.new( req, :name => 'session', :domain => 'example.com' )
-
-					else
-						req.server.log_error "No case for %p defined in the handler." % [ req.uri ]
-						exit Apache::NOT_FOUND
-					end
-
-				cookie.bake if cookie
-				req.headers_out['Content-type'] = 'text/plain'
-				req.puts( '' )
-
-				return Apache::OK
-			end
-		END_CODE
-
 		setup_logging( :debug )
-		@server_info = setup_testing_apache( "Apache::Cookie class", @handler )
+		@server_info = setup_testing_apache( "Apache::Cookie class" )
 	end
 
 	after( :all ) do
@@ -127,12 +54,32 @@ describe Apache do
 
 	# Default (empty) cookie
 	it "sends an empty 'Set-Cookie' header if an empty cookie is added" do
-		requesting( '/default_cookie' ).should respond_with( HTTP_OK ).
+		install_handlers do
+			rubyhandler( '/', <<-END_CODE )
+				cookie = Apache::Cookie.new( req )
+				cookie.bake
+				req.headers_out['Content-type'] = 'text/plain'
+				req.puts( '' )
+
+				return Apache::OK
+			END_CODE
+		end
+
+		requesting( '/' ).should respond_with( HTTP_OK ).
 			and_header( 'Set-Cookie', '' )
 	end
 
 	# Name-only cookie
 	it "sends a cookie with an empty value if a value-less cookie is added" do
+		install_rubyhandler( '/', <<-END_CODE )
+			cookie = Apache::Cookie.new( req, :name => 'session_id' )
+			cookie.bake
+			req.headers_out['Content-type'] = 'text/plain'
+			req.puts( '' )
+
+			return Apache::OK
+		END_CODE
+
 		requesting( '/nameonly_cookie' ).should respond_with( HTTP_OK ).
 			and_header( 'Set-Cookie', %r{session_id=(; path=/)?} )
 	end
