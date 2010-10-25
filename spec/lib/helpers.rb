@@ -5,21 +5,18 @@ require 'pathname'
 require 'singleton'
 require 'open-uri'
 
+require 'spec/lib/constants'
+require 'spec/lib/matchers'
+
 module Apache
 
-	require 'spec/lib/spechandler'
-
+	### Generator for handler configuration files + the handlers themselves.
 	class HandlerConfig
-
-		# The name of the config that gets included into the testing server's 
-		# boilerplate config
-		CONFIG_INCLUDE_FILE = 'handlers.conf'
-
+		include Apache::TestConstants
 
 		### Create a new handler configuration, then call the given +block+ in 
 		### the context of the new object.
-		def initialize( configdir, &block )
-			@configdir = Pathname( configdir )
+		def initialize( &block )
 			@handlers = Hash.new do |h,k|
 				h[k] = []
 			end
@@ -34,7 +31,7 @@ module Apache
 		end
 
 
-		attr_reader :configdir, :handlers
+		attr_reader :handlers
 
 
 		### Install a RubyHandler at the specified +url+ with the body of the
@@ -46,9 +43,8 @@ module Apache
 
 		### Write the configured handlers to the CONFIG_INCLUDE_FILE.
 		def generate_handlers
-			path = @configdir + CONFIG_INCLUDE_FILE
 			config = self.generate_handler_config
-			path.open( 'w', 0644 ) do |fh|
+			CONFIG_INCLUDE_FILE.open( 'w', 0644 ) do |fh|
 				fh.print( config )
 			end
 		end
@@ -58,8 +54,12 @@ module Apache
 		### and return it as a String.
 		def generate_handler_config
 			config = ''
-			self.handlers.each do |handlertype, config|
-				config << self.send( "write_#{handlertype}", *config )
+			self.handlers.each do |handlertype, handler_config|
+				# $stderr.puts "Writing #{handlertype}s"
+				handler_config.each do |args|
+					# $stderr.puts "  config: %p" % [ args ]
+					config << self.send( "write_#{handlertype}", *args )
+				end
 			end
 
 			return config
@@ -70,13 +70,13 @@ module Apache
 		### that points to it.
 		def write_rubyhandler( url, code )
 			@handler_counter += 1
-			handlerfile = @configdir + "rubyhandler%d.rb" % [ @handler_counter ]
+			handlerfile = TEST_DATADIR + "rubyhandler%d.rb" % [ @handler_counter ]
 			handlerclass = "TestRubyHandler%d" % [ @handler_counter ]
 
 			handlerfile.open( 'w', 0644 ) do |fh|
 				fh.puts <<-EO_CLASS
 					class #{handlerclass}
-						def handler( request )
+						def self::handler( req )
 							#{code}
 						end
 					end
@@ -86,6 +86,7 @@ module Apache
 			return %{
 				RubyRequire #{handlerfile}
 				<Location #{url}>
+					SetHandler ruby-object
 					RubyHandler #{handlerclass}
 				</Location>
 			}
@@ -95,25 +96,7 @@ module Apache
 
 
 	module SpecHelpers
-
-		BASEDIR             = Pathname( __FILE__ ).expand_path.dirname.parent.parent
-
-		LIBDIR              = BASEDIR + 'lib'
-		EXTDIR              = BASEDIR + 'ext'
-
-		SPECDIR             = BASEDIR + 'spec'
-		SPEC_DATADIR        = SPECDIR + 'data'
-		SPEC_LIBDIR         = SPECDIR + 'lib'
-		LISTEN_PORT         = rand( 2000 ) + 62_000
-
-		TEST_DIRECTORY      = BASEDIR + "tmp_test_specs"
-		TEST_DATADIR        = TEST_DIRECTORY + 'data'
-		CONFIGFILE          = TEST_DIRECTORY + 'test.conf'
-
-		HTTPD_CONF_TEMPLATE = SPEC_DATADIR + 'testing_httpd.conf.erb'
-		HANDLER_RB          = TEST_DATADIR + 'handler.rb'
-
-		$LOAD_PATH.unshift( SPEC_LIBDIR.to_s ) unless $LOAD_PATH.include?( SPEC_LIBDIR.to_s )
+		include Apache::TestConstants
 
 		PROGRAM_PATHS       = {}
 
@@ -318,12 +301,20 @@ module Apache
 		end
 
 
+		### Run the given 'httpd' command with the correct config file and flags.
+		def apache_cmd( command )
+			httpd = which( 'httpd' )
+			pid = log_and_run @logfile, httpd, '-f', CONFIGFILE, '-e', 'debug', '-k', command
+			Process.waitpid( pid )
+			return pid
+		end
+
+
 		### Set up an Apache instance for testing.
-		def setup_testing_apache( description, handler_class )
+		def setup_testing_apache( description )
 			stop_existing_servers()
 
-			log "Setting up test httpd for %s tests with %p" %
-				[ description, handler_class ]
+			log "Setting up test httpd for %s tests" % [ description ]
 			TEST_DATADIR.mkpath
 
 			# Write the config file, expanded from an ERB template
@@ -332,6 +323,7 @@ module Apache
 				output = template.result( binding() )
 				ofh.print( output )
 			end
+			CONFIG_INCLUDE_FILE.open( 'w', 0644 ) {  } # touch the includefile
 
 			# Start the server
 			@pid = apache_cmd( 'start' )
@@ -355,20 +347,12 @@ module Apache
 		end
 
 
-		### Run the given 'httpd' command with the correct config file and flags.
-		def apache_cmd( command )
-			httpd = which( 'httpd' )
-			pid = log_and_run @logfile, httpd, '-f', CONFIGFILE, '-e', 'debug', '-k', command
-			Process.waitpid( pid )
-			return pid
-		end
-
-
 		### Stop a running testing Apache instance
 		def teardown_testing_apache
 			raise "No pid was set." unless @pid
 			log "Tearing down test httpd at PID #@pid"
 			apache_cmd( 'stop' )
+			@pid = nil
 		end
 
 
@@ -383,6 +367,10 @@ module Apache
 		### Set up one or more handlers in the +block+ and then gracefully restart the testing
 		### Apache.
 		def install_handlers( &block )
+			unless @pid
+				abort "No testing apache running? Did you forget to call setup_testing_apache()?"
+			end
+
 			handlerconfig = HandlerConfig.new( &block )
 			handlerconfig.generate_handlers
 			apache_cmd( 'graceful' )
@@ -578,5 +566,14 @@ end # module Apache
 class Numeric
 	include Apache::NumericConstantMethods::Time,
 	        Apache::NumericConstantMethods::Bytes
+end
+
+
+### Mock with Rspec
+Rspec.configure do |config|
+	config.mock_with :rspec
+	config.include( Apache::TestConstants )
+	config.include( Apache::SpecHelpers )
+	config.include( Apache::SpecMatchers )
 end
 

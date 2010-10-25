@@ -2,7 +2,38 @@
 #coding: utf-8
 
 module Apache
+
+	class Connection; end
+	class Cookie; end
+	class MultiVal; end
+	class ParamTable; end
+	class Request; end
+	class Server; end
+	class Table; end
+	class Upload; end
+
 	module TestConstants
+
+		BASEDIR             = Pathname( __FILE__ ).expand_path.dirname.parent.parent
+
+		LIBDIR              = BASEDIR + 'lib'
+		EXTDIR              = BASEDIR + 'ext'
+
+		SPECDIR             = BASEDIR + 'spec'
+		SPEC_DATADIR        = SPECDIR + 'data'
+		SPEC_LIBDIR         = SPECDIR + 'lib'
+		LISTEN_PORT         = rand( 2000 ) + 62_000
+
+		TEST_DIRECTORY      = BASEDIR + "tmp_test_specs"
+		TEST_DATADIR        = TEST_DIRECTORY + 'data'
+		CONFIGFILE          = TEST_DIRECTORY + 'test.conf'
+
+		HTTPD_CONF_TEMPLATE = SPEC_DATADIR + 'testing_httpd.conf.erb'
+		# HANDLER_RB          = TEST_DATADIR + 'handler.rb'
+
+		# The name of the config that gets included into the testing server's 
+		# boilerplate config
+		CONFIG_INCLUDE_FILE = TEST_DATADIR + 'handlers.conf'
 
 		unless defined?( M_GET )
 			M_GET       = 0

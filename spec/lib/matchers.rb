@@ -3,13 +3,11 @@
 require 'net/http'
 
 require 'spec/lib/constants'
-require 'spec/lib/helpers'
 
 
 module Apache
 	module SpecMatchers
-		include Apache::SpecHelpers,
-		        Apache::TestConstants
+		include Apache::TestConstants
 
 		# An object for building up HTTP requests.
 		class HTTPAgent

@@ -6,8 +6,8 @@ require 'pathname'
 require 'rubygems'
 require 'rubygems/package_task'
 
-require 'spec'
-require 'spec/runner'
+require 'rspec'
+require 'rspec/core/rake_task'
 
 require 'rake'
 require 'rake/clean'
@@ -206,17 +206,22 @@ CLEAN.include( EXT_FILES.pathmap("%X.o") )
 # Testing tasks
 #
 
-desc "Generate regular color 'doc' spec output"
-task :spec => [ MODRUBY_MODULE.to_s ] do |task|
-	opts = Spec::Runner::Options.new( $stderr, $stdout )
-	opts.parse_format( 'specdoc' )
-	opts.parse_diff( 'unified' )
-	opts.colour = true
-	opts.files.push( *SPEC_FILES )
-
-	Spec::Runner.use( opts )
-	opts.run_examples
+# desc "Generate regular color 'doc' spec output"
+# task :spec => [ MODRUBY_MODULE.to_s ] do |task|
+# 	opts = RSpec::Runner::Options.new( $stderr, $stdout )
+# 	opts.parse_format( 'specdoc' )
+# 	opts.parse_diff( 'unified' )
+# 	opts.colour = true
+# 	opts.files.push( *SPEC_FILES )
+# 
+# 	RSpec::Runner.use( opts )
+# 	opts.run_examples
+# end
+RSpec::Core::RakeTask.new( :spec ) do |task|
+	task.rspec_opts = "-cfd"
 end
+task :spec => [ MODRUBY_MODULE.to_s ]
+
 
 CLEAN.include( 'spec.log', 'tmp_test_specs' )
 
