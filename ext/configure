@@ -1,3 +1,8 @@
+#!/bin/sh
+
+extdir=`dirname $0`
+
 # A shim to make RubyGems use the right configure script
-echo "Running configure.rb with arguments: ${*}" >2
-exec configure.rb $*
+echo "Running configure.rb with arguments: ${*}"
+exec ${extdir}/configure.rb $*
+
