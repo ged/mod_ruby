@@ -110,11 +110,12 @@ YARD_OPTIONS = [
   ]
 
 # The manifest for packaging
-RELEASE_FILES = TEXT_FILES +
-                SPEC_FILES +
-                BIN_FILES  +
-                LIB_FILES  +
-                EXT_FILES  +
+RELEASE_FILES = TEXT_FILES  +
+                SPEC_FILES  +
+                BIN_FILES   +
+                LIB_FILES   +
+                EXT_FILES   +
+                BUILD_FILES +
                 DATA_FILES
 
 # RubyGem specification
@@ -172,8 +173,16 @@ include RakefileHelpers
 # Tasks for mod_ruby
 #
 
-task :default => :spec
+desc "Default task -- compile, run specs, generate API docs, and build a gem"
+task :default => [:spec, :apidocs, :gem]
 
+
+#
+# Compilation tasks
+#
+
+desc "Compile the Apache module (#{MODRUBY_MODULE})"
+task :compile => MODRUBY_MODULE.to_s
 
 file AUTOCONF_RB
 
@@ -205,39 +214,35 @@ end
 CLEAN.include( MODRUBY_MODULE.to_s )
 CLEAN.include( EXT_FILES.pathmap("%X.o") )
 
+
 #
 # Testing tasks
 #
 
-# desc "Generate regular color 'doc' spec output"
-# task :spec => [ MODRUBY_MODULE.to_s ] do |task|
-# 	opts = RSpec::Runner::Options.new( $stderr, $stdout )
-# 	opts.parse_format( 'specdoc' )
-# 	opts.parse_diff( 'unified' )
-# 	opts.colour = true
-# 	opts.files.push( *SPEC_FILES )
-# 
-# 	RSpec::Runner.use( opts )
-# 	opts.run_examples
-# end
-RSpec::Core::RakeTask.new( :spec ) do |task|
-	task.rspec_opts = "-cfd"
+desc "Run the unit tests"
+task :spec => 'spec:default'
+
+namespace :spec do
+
+	RSpec::Core::RakeTask.new( :default ) do |task|
+		task.rspec_opts = "-cfd"
+	end
+	task :default => [ MODRUBY_MODULE.to_s ]
+
 end
-task :spec => [ MODRUBY_MODULE.to_s ]
+CLEAN.include( SPEC_TMPDIR.to_s )
 
-
-CLEAN.include( 'spec.log', 'tmp_test_specs' )
 
 #
 # Packaging task
 #
 
-CLEAN.include( PKGDIR.to_s )
 desc "Build the mod_ruby gem"
 Gem::PackageTask.new( GEMSPEC ) do |pkg|
 	pkg.need_zip = true
 	pkg.need_tar = true
 end
+CLEAN.include( PKGDIR.to_s )
 
 
 #
@@ -341,6 +346,10 @@ end
 task :apidocs => DOCFILES
 CLEAN.include( API_DOCSDIR.to_s  )
 
+
+#
+# Commit tasks -- not done yet.
+#
 
 ### Generate a changelog.
 def make_hg_changelog
