@@ -47,6 +47,8 @@ describe Apache do
 		@server_info = setup_testing_apache( "Apache::Cookie class" )
 	end
 
+	around( :each ) {|example| capture_log(&example) }
+
 	after( :all ) do
 		teardown_testing_apache()
 	end
@@ -93,7 +95,8 @@ describe Apache do
 		install_handlers do
 			rubyhandler( '/', <<-END_CODE )
 				require 'digest/md5'
-				sess_id = Digest::MD5.hexdigest( Time.at(1234567890).to_s + ':127.0.0.1' )
+				data = Time.at(1234567890).strftime('%Y/%m/%d %H:%M:%S') + ':127.0.0.1'
+				sess_id = Digest::MD5.hexdigest( data )
 				cookie = Apache::Cookie.new( req, :name => 'session_id', :value => sess_id )
 
 				cookie.bake
@@ -105,7 +108,7 @@ describe Apache do
 		end
 
 		requesting( '/' ).should respond_with( HTTP_OK ).
-			and_header( 'Set-Cookie', /session_id=bc08d2698ccd8087101ffd24535992cf/ )
+			and_header( 'Set-Cookie', /session_id=ee97f0a63ff684b05856f159549ea3e7/ )
 	end
 
 	it "allows a cookie's value to be set to an Array of Strings" do
@@ -130,10 +133,15 @@ describe Apache do
 	it "can fetch the first value from an Array of cookie values" do
 		install_handlers do
 			rubyhandler( '/', <<-END_CODE )
+				req.server.log_info "In spec."
+				
 				cookie = req.cookies['search_tags'] or
 					raise "No 'search_tags' cookie in the request!"
+				req.server.log_debug "  got cookie: %p" % [ cookie ]
 				req.puts( cookie.value )
+				req.server.log_debug "  wrote the cookie value."
 
+				req.server.log_debug "  done with spec handler. About to return OK."
 				return Apache::OK
 			END_CODE
 		end

@@ -52,7 +52,8 @@ TEXT_FILES    = Rake::FileList.new( %w[Rakefile ChangeLog COPYING LEGAL LICENSE.
                                        NOTICE README*] )
 BIN_FILES     = Rake::FileList.new( "#{BINDIR}/*" )
 LIB_FILES     = Rake::FileList.new( "#{LIBDIR}/**/*.rb" )
-EXT_FILES     = Rake::FileList.new( "#{EXTDIR}/**/*.{c,h,rb,in,tmpl,libdir,module}" )
+EXT_FILES     = Rake::FileList.new( "#{EXTDIR}/**/*.{c,h}" )
+BUILD_FILES   = Rake::FileList.new( "#{EXTDIR}/**/*.{rb,in,tmpl,libdir,module}" )
 DATA_FILES    = Rake::FileList.new( "#{DATADIR}/**/*" )
 
 SPECDIR       = BASEDIR + 'spec'
@@ -100,9 +101,10 @@ YARD_OPTIONS = [
 	'--use-cache',
 	'--no-private',
 	'--protected',
+	'--hide-void-return',
 	'-r', README_FILE,
-	'--exclude', '(configure|autoconf)\\.rb',
-	'--files', 'COPYING,LEGAL,NOTICE,README.ja,README.en,doc/*.rd',
+	'--exclude', 'rails_dispatcher\\.rb',
+	'--files', 'COPYING,LEGAL,NOTICE,README.en',
 	'--output-dir', API_DOCSDIR.to_s,
 	'--title', "#{PKG_NAME} #{PKG_VERSION}",
   ]
@@ -133,6 +135,7 @@ GEMSPEC = Gem::Specification.new do |gem|
 	gem.has_rdoc          = true
 	gem.rdoc_options      = RDOC_OPTIONS
 	gem.extra_rdoc_files  = [
+		# :TODO: After I add the 'rd' converter for YARD
 		'doc/classes.en.rd',
 		'doc/classes.ja.euc.rd',
 		'doc/default.css',
@@ -266,6 +269,7 @@ begin
 	end
 
 	class YARD::CLI::Base; include YardGlobals; end
+	class YARD::CLI::Command; include YardGlobals; end
 	class YARD::Parser::SourceParser; extend YardGlobals; include YardGlobals; end
 	class YARD::Parser::CParser; include YardGlobals; end
 	class YARD::CodeObjects::Base; include YardGlobals; end
@@ -275,9 +279,38 @@ begin
 	class YARD::RegistryStore; include YardGlobals; end
 	class YARD::Docstring; include YardGlobals; end
 	module YARD::Templates::Helpers::ModuleHelper; include YardGlobals; end
+	module YARD::Tags::RefTaglist; include YardGlobals; end
+
+	if vvec(RUBY_VERSION) >= vvec("1.9.1")
+		# Monkeypatched to allow more than two '#' characters at the beginning
+		# of the comment line.
+		# Patched from yard-0.5.8
+		require 'yard/parser/ruby/ruby_parser'
+		class YARD::Parser::Ruby::RipperParser < Ripper
+			def on_comment(comment)
+				# $stderr.puts "Adding comment: %p" % [ comment ]
+				visit_ns_token(:comment, comment)
+
+				comment = comment.gsub(/^\#+\s?/, '').chomp
+				append_comment = @comments[lineno - 1]
+
+				if append_comment && @comments_last_column == column
+					@comments.delete(lineno - 1)
+					comment = append_comment + "\n" + comment
+				end
+
+				@comments[lineno] = comment
+				@comments_last_column = column
+			end
+		end # class YARD::Parser::Ruby::RipperParser
+	end
+
 	# </metamonkeypatch>
 
 	YARD_OPTIONS = [] unless defined?( YARD_OPTIONS )
+
+	# This file makes YARD throw fits for reasons I don't entirely understand.
+	DOCFILES.exclude( 'lib/apache/rails-dispatcher.rb' )
 
 	yardoctask = YARD::Rake::YardocTask.new( :apidocs ) do |task|
 		task.files   = DOCFILES

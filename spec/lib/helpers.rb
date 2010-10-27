@@ -4,15 +4,31 @@ require 'erb'
 require 'pathname'
 require 'singleton'
 require 'open-uri'
+require 'logger'
 
 require 'spec/lib/constants'
-require 'spec/lib/matchers'
+
+$logger = Logger.new( $stderr )
+$default_logger = $logger
+
+LOG_LEVELS = {
+	:debug => Logger::DEBUG,
+	:info  => Logger::INFO,
+	:warn  => Logger::WARN,
+	:error => Logger::ERROR,
+	:fatal => Logger::FATAL,
+}
 
 module Apache
 
 	### Generator for handler configuration files + the handlers themselves.
 	class HandlerConfig
 		include Apache::TestConstants
+
+		# The directory that contains all the templates for building handler
+		# classes and configs
+		HANDLER_TEMPLATE_DIR = Pathname( __FILE__ ).dirname.parent + 'data/handlers'
+
 
 		### Create a new handler configuration, then call the given +block+ in 
 		### the context of the new object.
@@ -73,14 +89,11 @@ module Apache
 			handlerfile = TEST_DATADIR + "rubyhandler%d.rb" % [ @handler_counter ]
 			handlerclass = "TestRubyHandler%d" % [ @handler_counter ]
 
+			handler_template = self.load_handler_template( :rubyhandler )
+
+			handlercode = handler_template.result( binding() )
 			handlerfile.open( 'w', 0644 ) do |fh|
-				fh.puts <<-EO_CLASS
-					class #{handlerclass}
-						def self::handler( req )
-							#{code}
-						end
-					end
-				EO_CLASS
+				fh.print( handlercode )
 			end
 
 			return %{
@@ -89,7 +102,18 @@ module Apache
 					SetHandler ruby-object
 					RubyHandler #{handlerclass}
 				</Location>
-			}
+			}.gsub( /^\t{4}/, '' )
+		end
+
+
+		### Load an ERB template for the given +handlertype+ and return it.
+		def load_handler_template( handlertype )
+			tmplpath = HANDLER_TEMPLATE_DIR + "#{handlertype}_class.erb"
+			if Object.const_defined?( :Encoding )
+				return ERB.new( tmplpath.read(:encoding => 'UTF-8'), nil, '%<>' )
+			else
+				return ERB.new( tmplpath.read, nil, '%<>' )
+			end
 		end
 
 	end # class HandlerConfig
@@ -98,8 +122,14 @@ module Apache
 	module SpecHelpers
 		include Apache::TestConstants
 
-		PROGRAM_PATHS       = {}
+		# Paths to programs in the PATH (@see #which)
+		PROGRAM_PATHS         = {}
 
+		# The number of seconds to wait for processes to spin up and die off
+		PROCESS_TIMEOUT       = 15.0
+
+		# How many seconds to wait between process checks when waiting for one to spin up or die off
+		PROCESS_WAIT_INTERVAL = 0.25
 
 		# Set some ANSI escape code constants (Shamelessly stolen from Perl's
 		# Term::ANSIColor by Russ Allbery <rra@stanford.edu> and Zenin <zenin@best.com>
@@ -145,6 +175,7 @@ module Apache
 					find {|path| path.exist? && path.executable? } or
 					raise "the %p executable was not found in your PATH" % [ program ]
 				PROGRAM_PATHS[ program ] = path
+				log "Using #{program} at %s" % [ path ]
 			end
 			return PROGRAM_PATHS[ program ].to_s
 		end
@@ -188,15 +219,21 @@ module Apache
 
 		### Output a message with highlighting.
 		def log( *msg )
-			$stderr.puts( colorize(:bold) { msg.flatten.join(' ') } )
+			if $stderr.tty?
+				$logger.info( colorize(:cyan) {msg.flatten.join( ' ' )} )
+			else
+				$logger.info( msg.flatten.join(' ') )
+			end
 		end
 
 
 		### Output a logging message if $VERBOSE is true
 		def trace( *msg )
-			return unless $VERBOSE
-			output = colorize( msg.flatten.join(' '), 'yellow' )
-			$stderr.puts( output )
+			if $stderr.tty?
+				$logger.debug( colorize( :yellow ) {msg.flatten.join( ' ' )} )
+			else
+				$logger.debug( msg.flatten.join(' ') )
+			end
 		end
 
 
@@ -210,6 +247,7 @@ module Apache
 		### fails.
 		def run( *cmd )
 			cmd.flatten!
+			cmd.collect! {|part| part.to_s }
 
 			if cmd.length > 1
 				trace( quotelist(*cmd) )
@@ -304,7 +342,7 @@ module Apache
 		### Run the given 'httpd' command with the correct config file and flags.
 		def apache_cmd( command )
 			httpd = which( 'httpd' )
-			pid = log_and_run @logfile, httpd, '-f', CONFIGFILE, '-e', 'debug', '-k', command
+			pid = log_and_run( @logfile, httpd, '-f', CONFIGFILE, '-e', 'debug', '-k', command )
 			Process.waitpid( pid )
 			return pid
 		end
@@ -326,22 +364,22 @@ module Apache
 			CONFIG_INCLUDE_FILE.open( 'w', 0644 ) {  } # touch the includefile
 
 			# Start the server
-			@pid = apache_cmd( 'start' )
+			apache_cmd( 'start' )
 
 			# Now wait for it to spin up, trying a connection once every 0.1s
-			trace "Testing apache running as PID %d on port %d; waiting for it to spin up..." %
-				[ @pid, LISTEN_PORT ]
+			trace "Waiting for Apache on port %d to spin up..." % [ LISTEN_PORT ]
 			timeout = 0.0
 			connected = false
-			until connected || timeout >= 5.0
+			until connected || timeout >= PROCESS_TIMEOUT
 				begin
 					TCPSocket.open( 'localhost', LISTEN_PORT )
 				rescue Errno::ECONNREFUSED
-					timeout += 0.1
-					sleep 0.1
+					timeout += PROCESS_WAIT_INTERVAL
+					sleep( PROCESS_WAIT_INTERVAL )
 				else
 					trace "  okay, it's up."
 					connected = true
+					@pid = Integer( PIDFILE.read )
 				end
 			end
 		end
@@ -350,17 +388,47 @@ module Apache
 		### Stop a running testing Apache instance
 		def teardown_testing_apache
 			raise "No pid was set." unless @pid
+
 			log "Tearing down test httpd at PID #@pid"
-			apache_cmd( 'stop' )
-			@pid = nil
+			apache_cmd( 'graceful-stop' )
+
+			# Wait for the parent httpd process to disappear before returning
+			timeout = 0.0
+			trace "waiting for parent Apache at PID #@pid to exit..."
+			until @pid.nil? || timeout >= PROCESS_TIMEOUT
+				begin
+					trace "  checking..."
+					Process.kill( 0, @pid )
+				rescue Errno::ESRCH
+					trace "  nope, it's gone."
+					@pid = nil
+				else
+					trace "  it's still around. Waiting %0.2f seconds until checking again." %
+						[ PROCESS_WAIT_INTERVAL ]
+					timeout += PROCESS_WAIT_INTERVAL
+					sleep( PROCESS_WAIT_INTERVAL )
+				end
+			end
+
+			trace "After teardown wait, pid is: %p" % [ @pid ]
+			raise "Testing Apache at pid %d didn't halt within %d seconds" %
+				[ @pid, PROCESS_TIMEOUT ] if @pid
 		end
 
 
-		### Set up the Apache log
-		### :FIXME: Figure out a way to inject the Apache log into the spec process somehow:
-		###         FIFO? Tailed logfile? 
-		def setup_logging( level=:crit )
-			@logfile = BASEDIR + 'spec.log'
+		### Create a logger that outputs to the Apache error log.
+		def setup_logging( level=:fatal )
+			@logfile = ERRORLOG
+			@logfile.dirname.mkpath
+			$logger = Logger.new( @logfile )
+			$logger.level = LOG_LEVELS[ level ] || Logger::INFO
+		end
+
+
+		### Set logging to go back to STDERR.
+		def reset_logging()
+			@logfile = nil
+			$logger = $default_logger
 		end
 
 
@@ -371,9 +439,32 @@ module Apache
 				abort "No testing apache running? Did you forget to call setup_testing_apache()?"
 			end
 
+			if self.example
+				log( example.description )
+			else
+				log( "Group: ", self.class.description )
+			end
+
 			handlerconfig = HandlerConfig.new( &block )
 			handlerconfig.generate_handlers
 			apache_cmd( 'graceful' )
+		end
+
+		### Inject the portions of the error log that were written while the block
+		### was called into the thread-local logging array (webkit-rspec-formatter support).
+		### This is designed to be used as an 'around' hook in specs that want the error log
+		### in rspec output.
+		def capture_log
+			raise LocalJumpError, "no block given" unless block_given?
+			Thread.current[ 'logger-output' ] = []
+
+			ERRORLOG.dirname.mkpath
+			File.open( ERRORLOG, File::RDONLY ) do |log|
+				log.seek( 0, IO::SEEK_END )
+				yield
+				Thread.current[ 'logger-output' ] << log.readlines.
+					collect {|line| line.sub(/\n/, '<br />')}
+			end
 		end
 
 	end # module SpecHelpers
@@ -567,6 +658,8 @@ class Numeric
 	include Apache::NumericConstantMethods::Time,
 	        Apache::NumericConstantMethods::Bytes
 end
+
+require 'spec/lib/matchers'
 
 
 ### Mock with Rspec

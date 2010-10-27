@@ -1,8 +1,10 @@
 #!/usr/bin/env ruby
 
+require 'uri'
 require 'net/http'
 
 require 'spec/lib/constants'
+require 'spec/lib/helpers'
 
 
 module Apache
@@ -11,6 +13,7 @@ module Apache
 
 		# An object for building up HTTP requests.
 		class HTTPAgent
+			include Apache::SpecHelpers
 
 			### Create a new Request wrapper around an HTTP request object.
 			def initialize( host, port, path, verb=:get, headers={} )
@@ -21,25 +24,22 @@ module Apache
 				@verb     = verb
 				@headers  = headers || {}
 				@body     = nil
+				@params   = {}
 				@request  = nil
 				@response = nil
 
 				@debug_output = ''
 			end
 
-			attr_accessor :host, :port, :path, :verb, :headers, :body, :request
+			attr_accessor :host, :port, :path, :verb, :headers, :body, :params, :request
 			attr_reader :debug_output
 
 
 			### Fetch the response and delegate the expection to it.
 			def response
 				unless @response
-					req_class = Net::HTTP.const_get( self.verb.to_s.capitalize ) or
-						raise NameError, "Unknown request verb %p" % [ self.verb ]
-					trace "Sending a %p to the server..." % [ req_class ]
-
-					self.request = req_class.new( self.path, self.headers )
-					trace "  request is: %p" % [ self.request ]
+					trace "Sending a %s to the server..." % [ self.verb ]
+					self.request = self.send( "make_%s_request" % [self.verb.to_s] )
 
 					http = Net::HTTP.new( self.host, self.port )
 					http.set_debug_output( @debug_output )
@@ -53,14 +53,95 @@ module Apache
 				return @response
 			end
 
-			#######
-			private
-			#######
 
-			### Output a trace message.
-			def trace( *mgs )
-				$stderr.puts( msgs.join ) if $VERBOSE
+			### Add an entity body to a POST or PUT request.
+			def with_body( data )
+				@body = data
+				return self
 			end
+
+
+			### Add form parameters to a GET or POST request.
+			def with_form_parameters( params )
+				trace "  setting form parameters to: %p" % [ params ]
+				@params = params
+				return self
+			end
+
+
+			#########
+			protected
+			#########
+
+			### Make a Net::HTTP::Get request with the configured path, headers, params, etc. and
+			### return it.
+			def make_get_request
+				path = self.path
+				path += '?' + self.get_query_args unless self.params.empty?
+				return Net::HTTP::Get.new( path, self.headers )
+			end
+
+
+			### Make a Net::HTTP::Head request 
+			def make_head_request
+				path = self.path
+				path += '?' + self.get_query_args unless self.params.empty?
+				return Net::HTTP::Head.new( path, self.headers )
+			end
+
+
+			### Make a Net::HTTP::Post request with the configured path, headers, params, etc. and
+			### return it.
+			def make_post_request
+				request = Net::HTTP::Post.new( self.path, self.headers )
+				request.set_form_data( self.params ) unless self.params.empty?
+				return request
+			end
+
+
+			### Make a Net::HTTP::Put request with the configured path, headers, etc. and
+			### return it.
+			def make_put_request
+				return Net::HTTP::Put.new( self.path, self.headers )
+			end
+
+
+			### Make a Net::HTTP::Delete request with the configured path, headers, etc. and
+			### return it.
+			def make_delete_request
+				return Net::HTTP::Head.new( self.path, self.headers )
+			end
+
+
+			### Make a Net::HTTP::Options request with the configured path, headers, etc. and
+			### return it.
+			def make_options_request
+				return Net::HTTP::Options.new( self.path, self.headers )
+			end
+
+
+			### Make a query arguments String out of the requested form params.
+			def get_query_args
+				return '' if self.params.empty?
+
+				trace "  encoding query args from param hash: %p" % [ params ]
+				if URI.respond_to?( :encode_www_form )
+					rval = URI.encode_www_form( self.params )
+				else
+					rval = self.params.collect do |k,v|
+						k = URI.escape( k.to_s )
+						if v.is_a?( Array )
+							v.collect {|val| "%s=%s" % [k, URI.escape(val.to_s)] }
+						else
+							"%s=%s" % [ k, URI.escape(v.to_s) ]
+						end
+					end.flatten.compact.join( '&' )
+				end
+
+				trace "    query args: %p" % [ rval ]
+				return rval
+			end
+
 
 		end # class HTTPAgent
 

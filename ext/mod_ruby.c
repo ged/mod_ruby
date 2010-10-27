@@ -658,7 +658,9 @@ static void ruby_init_interpreter(server_rec *s)
     RETSIGTYPE (*sigterm_handler)_((int));
 #endif
 #ifdef RUBY_VM
+#ifndef USE_SYMBOL_AS_METHOD_NAME /* 1.9.2 */
     void Init_prelude(void);
+#endif
     RUBY_INIT_STACK;
 #else
     VALUE stack_start;
@@ -704,7 +706,9 @@ static void ruby_init_interpreter(server_rec *s)
 
     ruby_init_loadpath();
 #ifdef RUBY_VM
+#ifndef USE_SYMBOL_AS_METHOD_NAME /* 1.9.2 */
     Init_prelude();
+#endif
 #endif
     default_load_path = rb_ary_dup(GET_LOAD_PATH());
     rb_global_variable(&default_load_path);

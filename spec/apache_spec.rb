@@ -38,8 +38,11 @@ describe Apache do
 		setup_testing_apache( "Apache module functions" )
 	end
 
+	around( :each ) {|example| capture_log(&example) }
+
 	after( :all ) do
 		teardown_testing_apache()
+		reset_logging()
 	end
 
 

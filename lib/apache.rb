@@ -48,60 +48,60 @@ module Apache
 		}
 		METHOD_NAMES_TO_NUMBERS = METHOD_NUMBERS_TO_NAMES.invert
 
-		OPT_NONE      = 0
-		OPT_INDEXES   = 1
-		OPT_INCLUDES  = 2
-		OPT_SYM_LINKS = 4
-		OPT_EXECCGI   = 8
-		OPT_ALL       = 15
-		OPT_UNSET     = 16
-		OPT_INCNOEXEC = 32
-		OPT_SYM_OWNER = 64
-		OPT_MULTI     = 128
+		OPT_NONE                           = 0
+		OPT_INDEXES                        = 1
+		OPT_INCLUDES                       = 2
+		OPT_SYM_LINKS                      = 4
+		OPT_EXECCGI                        = 8
+		OPT_ALL                            = 15
+		OPT_UNSET                          = 16
+		OPT_INCNOEXEC                      = 32
+		OPT_SYM_OWNER                      = 64
+		OPT_MULTI                          = 128
 
-		SATISFY_ALL    = 0
-		SATISFY_ANY    = 1
-		SATISFY_NOSPEC = 2
+		SATISFY_ALL                        = 0
+		SATISFY_ANY                        = 1
+		SATISFY_NOSPEC                     = 2
 
-		REQUEST_NO_BODY         = 0
-		REQUEST_CHUNKED_ERROR   = 1
-		REQUEST_CHUNKED_DECHUNK = 2
+		REQUEST_NO_BODY                    = 0
+		REQUEST_CHUNKED_ERROR              = 1
+		REQUEST_CHUNKED_DECHUNK            = 2
 
-		REMOTE_HOST       = 0
-		REMOTE_NAME       = 1
-		REMOTE_NOLOOKUP   = 2
-		REMOTE_DOUBLE_REV = 3
+		REMOTE_HOST                        = 0
+		REMOTE_NAME                        = 1
+		REMOTE_NOLOOKUP                    = 2
+		REMOTE_DOUBLE_REV                  = 3
 
-		DONE     = -2
-		DECLINED = -1
-		OK       = 0
+		DONE                               = -2
+		DECLINED                           = -1
+		OK                                 = 0
 
-		HTTP_CONTINUE            = 100
-		HTTP_SWITCHING_PROTOCOLS = 101
-		HTTP_PROCESSING          = 102
+		HTTP_CONTINUE                      = 100
+		HTTP_SWITCHING_PROTOCOLS           = 101
+		HTTP_PROCESSING                    = 102
 
-		DOCUMENT_FOLLOWS       = 200
-		HTTP_OK                = 200
-		HTTP_CREATED           = 201
-		HTTP_ACCEPTED          = 202
-		HTTP_NON_AUTHORITATIVE = 203
-		HTTP_NO_CONTENT        = 204
-		HTTP_RESET_CONTENT     = 205
-		HTTP_PARTIAL_CONTENT   = 206
-		PARTIAL_CONTENT        = 206
-		HTTP_MULTI_STATUS      = 207
+		DOCUMENT_FOLLOWS                   = 200
+		HTTP_OK                            = 200
+		HTTP_CREATED                       = 201
+		HTTP_ACCEPTED                      = 202
+		HTTP_NON_AUTHORITATIVE             = 203
+		HTTP_NO_CONTENT                    = 204
+		HTTP_RESET_CONTENT                 = 205
+		HTTP_PARTIAL_CONTENT               = 206
+		PARTIAL_CONTENT                    = 206
+		HTTP_MULTI_STATUS                  = 207
 
-		HTTP_MULTIPLE_CHOICES   = 300
-		MULTIPLE_CHOICES        = 300
-		HTTP_MOVED_PERMANENTLY  = 301
-		MOVED                   = 301
-		HTTP_MOVED_TEMPORARILY  = 302
-		REDIRECT                = 302
-		HTTP_SEE_OTHER          = 303
-		HTTP_NOT_MODIFIED       = 304
-		USE_LOCAL_COPY          = 304
-		HTTP_USE_PROXY          = 305
-		HTTP_TEMPORARY_REDIRECT = 307
+		HTTP_MULTIPLE_CHOICES              = 300
+		MULTIPLE_CHOICES                   = 300
+		HTTP_MOVED_PERMANENTLY             = 301
+		MOVED                              = 301
+		HTTP_MOVED_TEMPORARILY             = 302
+		REDIRECT                           = 302
+		HTTP_SEE_OTHER                     = 303
+		HTTP_NOT_MODIFIED                  = 304
+		USE_LOCAL_COPY                     = 304
+		HTTP_USE_PROXY                     = 305
+		HTTP_TEMPORARY_REDIRECT            = 307
 
 		BAD_REQUEST                        = 400
 		HTTP_BAD_REQUEST                   = 400
@@ -133,80 +133,20 @@ module Apache
 		HTTP_LOCKED                        = 423
 		HTTP_FAILED_DEPENDENCY             = 424
 
-		HTTP_INTERNAL_SERVER_ERROR = 500
-		SERVER_ERROR               = 500
-		HTTP_NOT_IMPLEMENTED       = 501
-		NOT_IMPLEMENTED            = 501
-		BAD_GATEWAY                = 502
-		HTTP_BAD_GATEWAY           = 502
-		HTTP_SERVICE_UNAVAILABLE   = 503
-		HTTP_GATEWAY_TIME_OUT      = 504
-		HTTP_VERSION_NOT_SUPPORTED = 505
-		HTTP_VARIANT_ALSO_VARIES   = 506
-		VARIANT_ALSO_VARIES        = 506
-		HTTP_INSUFFICIENT_STORAGE  = 507
-		HTTP_NOT_EXTENDED          = 510
+		HTTP_INTERNAL_SERVER_ERROR         = 500
+		SERVER_ERROR                       = 500
+		HTTP_NOT_IMPLEMENTED               = 501
+		NOT_IMPLEMENTED                    = 501
+		BAD_GATEWAY                        = 502
+		HTTP_BAD_GATEWAY                   = 502
+		HTTP_SERVICE_UNAVAILABLE           = 503
+		HTTP_GATEWAY_TIME_OUT              = 504
+		HTTP_VERSION_NOT_SUPPORTED         = 505
+		HTTP_VARIANT_ALSO_VARIES           = 506
+		VARIANT_ALSO_VARIES                = 506
+		HTTP_INSUFFICIENT_STORAGE          = 507
+		HTTP_NOT_EXTENDED                  = 510
 
-
-
-		# Simulate Apache::Table
-		class Table
-			extend Forwardable
-			def initialize( hash={} )
-				hash.each {|k,v| hash[k.downcase] = v}
-				@hash = hash
-			end
-
-			def_delegators :@hash, :clear, :each, :each_key, :each_value
-
-			def []( key )
-				@hash[ key.downcase ]
-			end
-			alias_method :get, :[]
-
-			def []=( key, val )
-				@hash[ key.downcase ] = val
-			end
-			alias_method :set, :[]=
-
-			def key?( key )
-				@hash.key?( key.downcase )
-			end
-
-			def merge( key, val )
-				key = key.downcase
-				@hash[key] = [@hash[key]] unless @hash[key].is_a?( Array )
-				@hash[key] << val
-			end
-		end
-
-
-		### Dummy mod_ruby object base class
-		class ModRubySimObject
-			@derivatives = {}
-			class << self
-				attr_reader :derivatives
-			end
-
-			def self::inherited( mod )
-				@derivatives[ mod ] = caller( 1 ).first.split(/:/)
-				$stderr.puts "Registering simulated %s at %p" % 
-					[ mod.name, @derivatives[mod] ] if $DEBUG
-				super
-			end
-
-
-			#########
-			protected
-			#########
-
-			### Handle missing methods by auto-generating method definitions
-			def method_missing( sym, *args )
-				Apache.request.log_info "method #{self.class.name}##{name} missing"
-				return true
-			end
-
-		end
 
 
 		###############
@@ -246,162 +186,6 @@ module Apache
 		# Decodes a URL-encoded string.
 		def unescape_url( str )
 			return URI.unescape( str )
-		end
-
-
-		# Apache::Request
-		class Request < ModRubySimObject
-
-			INSTANCE_METHODS = %w{
-				<< add_cgi_vars add_common_vars all_params allow_options
-	            allow_overrides allowed allowed= args args= attributes auth_name
-	            auth_name= auth_type auth_type= binmode bytes_sent cache_resp
-	            cache_resp= cancel connection construct_url content_encoding
-	            content_encoding= content_languages content_languages=
-	            content_length content_type content_type= cookies cookies=
-	            custom_response default_charset default_type disable_uploads=
-	            disable_uploads? dispatch_handler dispatch_handler= eof eof?
-	            err_headers_out error_message escape_html exception filename
-	            filename= finfo get_basic_auth_pw get_client_block getc
-	            hard_timeout header_only? headers_in headers_out hostname
-	            initial? internal_redirect kill_timeout last log_reason
-	            lookup_file lookup_uri main main? method_number next
-	            note_auth_failure note_basic_auth_failure
-	            note_digest_auth_failure notes options output_buffer param
-	            params params_as_string paramtable parse path_info path_info=
-	            post_max post_max= prev print printf protocol proxy? proxy_pass?
-	            putc puts read register_cleanup remote_host remote_logname
-	            replace request_method request_time requires reset_timeout
-	            satisfies script_name script_path send_fd send_http_header
-	            sent_http_header? server server_name server_port setup_cgi_env
-	            setup_client_block should_client_block should_client_block?
-	            signature soft_timeout status status= status_line status_line=
-	            subprocess_env sync= sync_header sync_header= sync_output
-	            sync_output= temp_dir temp_dir= the_request unparsed_uri
-	            upload_hook upload_hook= upload_hook_data upload_hook_data=
-	            uploads uploads_disabled? uri uri= user user= write
-			}
-
-			def self::instance_methods( include_superclass=true )
-				return INSTANCE_METHODS
-			end
-
-
-			def initialize( uri=nil )
-				@uri = uri
-				@server = nil
-				@allowed = Apache::M_GET | Apache::M_POST
-				@paramtable = {}
-				@sync_header = false
-				@content_type = 'text/html'
-				@hostname = 'localhost'
-				@path_info = ''
-				@headers_in = Apache::Table.new
-				@headers_out = Apache::Table.new
-				@options = {}
-				@uploads = {}
-				@method_number = Apache::M_GET
-				@connection = Apache::Connection.new
-			end
-
-			attr_writer :server
-			attr_accessor :allowed, :sync_header, :content_type, :uri,
-				:hostname, :paramtable, :cookies, :options, :uploads,
-				:path_info, :headers_in, :headers_out, :method_number,
-				:connection
-			alias_method :params, :paramtable
-			alias_method :unparsed_uri, :uri
-
-			def paramtable=( hash )
-				# :TODO: Munge the hash into an Apache::Table object
-				@paramtable = @params = hash.stringify_keys
-			end
-			alias_method :params=, :paramtable=
-
-			def param( key )
-				@paramtable[ key ]
-			end
-
-			def cookies=( hash )
-				# :TODO: Munge the hash into a hash of Apache::Cookie objects
-				@cookies = hash
-			end
-
-			def server
-				@server ||= Apache::Server.new
-			end
-
-			def request_method
-				return Apache::METHOD_NUMBERS_TO_NAMES[ @method_number ]
-			end
-
-			def request_method=( methodname )
-				@method_number = Apache::METHOD_NAMES_TO_NUMBERS[ methodname ] or
-					raise "No such HTTP method '%s'" % [methodname]
-			end
-
-			def remote_host( lookup=nil )
-				return '127.0.0.1'
-			end
-
-			def the_request
-				return 'GET / HTTP/1.1'
-			end
-
-			def status
-				return Apache::OK
-			end
-
-		end
-
-		class Server < ModRubySimObject
-			def initialize
-				@loglevel = 99 # No logging by default
-			end
-
-			attr_accessor :loglevel
-
-			def hostname
-				"localhost"
-			end
-
-			# Auto-generate log_* methods
-			[
-				:debug,
-				:info,
-				:notice,
-				:warn,
-				:error,
-				:crit,
-				:alert,
-				:emerg,
-			].each do |sym|
-				define_method( "log_#{sym}" ) {|msg|
-					$stderr.puts "#{sym.to_s.upcase}: #{msg}" if $DEBUG
-				}
-			end
-
-			def admin
-				"jrandomhacker@localhost"
-			end
-		end
-
-		class Connection < ModRubySimObject
-			def remote_host
-				return '127.0.0.1'
-			end
-		end
-
-		class Cookie < ModRubySimObject
-		end
-
-		class MultiVal < ModRubySimObject
-		end
-
-		class Upload < ModRubySimObject
-		end
-
-		class ParamTable < ModRubySimObject
 		end
 
 	end # unless defined?( OK )

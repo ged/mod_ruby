@@ -27,13 +27,16 @@ module Apache
 		TEST_DIRECTORY      = BASEDIR + "tmp_test_specs"
 		TEST_DATADIR        = TEST_DIRECTORY + 'data'
 		CONFIGFILE          = TEST_DIRECTORY + 'test.conf'
+		PIDFILE             = TEST_DIRECTORY + 'httpd.pid'
 
-		HTTPD_CONF_TEMPLATE = SPEC_DATADIR + 'testing_httpd.conf.erb'
-		# HANDLER_RB          = TEST_DATADIR + 'handler.rb'
+		ERRORLOG            = TEST_DATADIR + 'error.log'
 
 		# The name of the config that gets included into the testing server's 
 		# boilerplate config
 		CONFIG_INCLUDE_FILE = TEST_DATADIR + 'handlers.conf'
+
+		HTTPD_CONF_TEMPLATE = SPEC_DATADIR + 'testing_httpd.conf.erb'
+		# HANDLER_RB          = TEST_DATADIR + 'handler.rb'
 
 		unless defined?( M_GET )
 			M_GET       = 0

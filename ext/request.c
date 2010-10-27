@@ -485,6 +485,15 @@ static VALUE request_puts(int argc, VALUE *argv, VALUE out)
     return Qnil;
 }
 
+/*
+ * call-seq:
+ *    req << string   -> req
+ *
+ * Does the same thing as Apache::Request#write, but returns the request
+ * object.
+ * 
+ * @return [Apache::Request]  the receiver
+ */
 static VALUE request_addstr(VALUE out, VALUE str)
 {
     request_write(out, str);
@@ -1302,6 +1311,29 @@ static VALUE request_get_basic_auth_pw(VALUE self)
     return rb_tainted_str_new2(pw);
 }
 
+/*
+ * call-seq:
+ *    request.add_common_vars
+ *
+ * Add other Apache CGI variables to the {#subprocess_env} table, in 
+ * addition to those added by {#add_cgi_vars}.
+ * 
+ * @return nil
+ * @example
+ *    HTTP_ACCEPT = "text/plain"
+ *    HTTP_HOST = "localhost:63093"
+ *    PATH = "/bin:/usr/bin"
+ *    SERVER_SIGNATURE = ""
+ *    SERVER_SOFTWARE = "Apache/2.2.15 (Unix) mod_ruby/1.3.0"
+ *    SERVER_NAME = "localhost"
+ *    SERVER_ADDR = "127.0.0.1"
+ *    SERVER_PORT = "63093"
+ *    REMOTE_ADDR = "127.0.0.1"
+ *    DOCUMENT_ROOT = "/tmp"
+ *    SERVER_ADMIN = "[no address given]"
+ *    SCRIPT_FILENAME = "/tmp/"
+ *    REMOTE_PORT = "56835"
+ */
 static VALUE request_add_common_vars(VALUE self)
 {
     request_data *data;
@@ -1311,6 +1343,21 @@ static VALUE request_add_common_vars(VALUE self)
     return Qnil;
 }
 
+
+/*
+ * call-seq:
+ *    request.add_cgi_vars
+ *
+ * Add the variables required by the CGI/1.1 protocol to the {#subprocess_env} table.
+ * 
+ * @example
+ *    GATEWAY_INTERFACE = 'CGI/1.1'
+ *    SERVER_PROTOCOL   = 'HTTP/1.1'
+ *    REQUEST_METHOD    = 'GET'
+ *    QUERY_STRING      = ''
+ *    REQUEST_URI       = '/'
+ *    SCRIPT_NAME       = ''
+ */
 static VALUE request_add_cgi_vars(VALUE self)
 {
     request_data *data;
@@ -1798,6 +1845,13 @@ static VALUE request_options(VALUE self)
     return data->options;
 }
 
+/*
+ * call-seq:
+ *    Apache::Request.libapreq?   -> true
+ *
+ * Returns +true+ if mod_ruby has been compiled with the Apache Request library.
+ * @deprecated This is no longer necessary, as libapreq support is built into mod_ruby itself.
+ */
 static VALUE request_libapreq_p( VALUE klass )
 {
     return Qtrue;
@@ -2030,6 +2084,10 @@ static VALUE request_params(VALUE self, VALUE key)
     return val ? rb_apache_array_new(val) : Qnil;
 }
 
+
+/*
+ * Iterator function: makes the Apache::Table for #all_params
+ */
 static int make_all_params(void *data, const char *key, const char *val)
 {
     VALUE hash = (VALUE) data;
@@ -2045,6 +2103,16 @@ static int make_all_params(void *data, const char *key, const char *val)
     return 1;
 }
 
+
+/*
+ * call-seq:
+ *    request.all_params   -> table
+ *
+ * Fetch all request parameters.
+ * 
+ * @return [Hash<String => String>]  the request parameters
+ * 
+ */
 static VALUE request_all_params(VALUE self, VALUE key)
 {
     request_data *data = get_request_data(self);
@@ -2086,13 +2154,9 @@ static VALUE request_cookies( VALUE self )
 
     if ( !data->apreq->parsed ) rb_funcall( self, rb_intern("parse"), 0 );
 
-#ifdef RUBY_VM
-    if ( ! RHASH(data->cookies)->ntbl->num_entries ) {
-#else
-    if ( ! RHASH(data->cookies)->tbl->num_entries ) {
-#endif
+    if ( ! RHASH_SIZE(data->cookies) ) {
 	ApacheCookieJar *jar = ApacheCookie_parse( data->request, NULL );
-    int i;
+	int i;
 
 	for ( i = 0; i < ApacheCookieJarItems(jar); i++ ) { 
 	    ApacheCookie *c = ApacheCookieJarFetch( jar, i );

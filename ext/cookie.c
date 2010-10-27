@@ -74,8 +74,6 @@ static ApacheCookie *get_cookie( VALUE self )
 /* Class methods */
 
 /*
- * allocate()
- * --
  * Allocate a new Apache::Cookie object.
  */
 static VALUE cookie_s_alloc( VALUE klass )
@@ -88,9 +86,8 @@ static VALUE cookie_s_alloc( VALUE klass )
 /* Instance methods */
 
 /*
- * name
- * --
  * Returns the name of the cookie.
+ * @return [String]
  */
 static VALUE cookie_name( VALUE self )
 {
@@ -100,9 +97,8 @@ static VALUE cookie_name( VALUE self )
 
 
 /*
- * name=
- * --
- * Sets the name of the cookie.
+ * Set the name of the cookie to +name+.
+ * @param [String] name  the name of the cookie.
  */
 static VALUE cookie_name_eq( VALUE self, VALUE arg )
 {
@@ -115,9 +111,8 @@ static VALUE cookie_name_eq( VALUE self, VALUE arg )
 
 
 /*
- * value
- * --
  * Returns the first value stored in the cookie as a String.
+ * @return [String]  the first value
  */
 static VALUE cookie_value( VALUE self )
 {
@@ -130,9 +125,8 @@ static VALUE cookie_value( VALUE self )
 
 
 /*
- * values
- * --
- * Returns all the values stored in the cookie as an Array.
+ * Returns all the values stored in the cookie.
+ * @return [Array<String>]  all of the values stored in the cookie.
  */
 static VALUE cookie_values( VALUE self )
 {
@@ -162,12 +156,12 @@ static VALUE cookie_stringify_push( VALUE val, VALUE ary )
 
 
 /*
- * value=( newval )
- * --
  * Sets the value of the cookie to +newval+. If the +newval+ responds to
- * #each, it will be called, and the iterated value will be added by calling
+ * #values_at, #each will be called, and the iterated value will be added by calling
  * ##to_s on it.  Otherwise, just the given +newval+ object will be
  * turned into a string via #to_s.
+ * 
+ * @param [#values_at, String] newval  the value/s to set in the cookie
  */
 static VALUE cookie_value_eq( VALUE self, VALUE newval )
 {
@@ -195,9 +189,8 @@ static VALUE cookie_value_eq( VALUE self, VALUE newval )
 
 
 /*
- * domain
- * --
  * Returns the domain of the cookie.
+ * @return [String] the domain
  */
 static VALUE cookie_domain( VALUE self )
 {
@@ -210,9 +203,8 @@ static VALUE cookie_domain( VALUE self )
 
 
 /*
- * domain=( newdomain )
- * --
  * Sets the domain of the cookie to the specified +newdomain+.
+ * @param [String] newdomain  the name of the domain
  */
 static VALUE cookie_domain_eq( VALUE self, VALUE newdomain )
 {
@@ -223,9 +215,8 @@ static VALUE cookie_domain_eq( VALUE self, VALUE newdomain )
 
 
 /*
- * path
- * --
  * Returns the path of the cookie.
+ * @return [String]  the cookie's path
  */
 static VALUE cookie_path( VALUE self )
 {
@@ -235,9 +226,8 @@ static VALUE cookie_path( VALUE self )
 
 
 /*
- * path=( newpath )
- * --
  * Sets the path of the cookie to +newpath+.
+ * @param [String] newpath  the path to associated with the cookie
  */
 static VALUE cookie_path_eq( VALUE self, VALUE newpath )
 {
@@ -248,9 +238,8 @@ static VALUE cookie_path_eq( VALUE self, VALUE newpath )
 
 
 /*
- * expires
- * --
  * Returns the value of the 'expires' field.
+ * @return [String] expires  the cookie's expiration, as an HTTP date.
  */
 static VALUE cookie_expires( VALUE self )
 {
@@ -263,11 +252,10 @@ static VALUE cookie_expires( VALUE self )
 
 
 /*
- * expires=( expiration )
- * --
- * Sets the 'expires' field. The +expiration+ object can be either a String or a
- * Time object. If it is a string, any of the following formats are permitted:
- *
+ * Sets the 'expires' field. The +expiration+ object can be either a relative time in 
+ * a String or a absolute time in a Time object.
+ * 
+ * @param [String] expiration  the time when the cookie should expire
  *   +30s::                                30 seconds from now 
  *   +10m::                                ten minutes from now 
  *   +1h::                                 one hour from now 
@@ -293,9 +281,8 @@ static VALUE cookie_expires_eq( VALUE self, VALUE expiration )
 
 
 /*
- * secure?
- * --
  * Returns +true+ if the cookie's 'secure' flag is set.
+ * @return [boolean]
  */
 static VALUE cookie_secure( VALUE self )
 {
@@ -305,9 +292,9 @@ static VALUE cookie_secure( VALUE self )
 
 
 /*
- * secure=( bool )
- * --
  * Sets the 'secure' flag of the cookie to either +true+ or +false+.
+ * @param [boolean] val  +true+ if the cookie should be marked 'secure' (i.e., should only be sent
+ *                       over an encrypted channel such as an SSL connection)
  */
 static VALUE cookie_secure_eq( VALUE self, VALUE val )
 {
@@ -365,28 +352,27 @@ static VALUE cookie_set_attr( VALUE pair, VALUE self )
 }
 
 
-/*
- * initialize( request, options={} )
- * --
+/* 
+ * call-seq:
+ *     new( req, options={} )   -> cookie
+ * 
  * Returns a new Apache::Cookie for the specified +request+ (an Apache::Request
  * object). The optional +options+ Hash may be used to initialize the cookie's
- * attributes. The following keys are supported:
- *
- *   :name
- *	    Sets the name field to the given value. 
- *	 :value
- *	    Adds the value to values field. 
- *	 :expires
- *	    Sets the expires field to the calculated date String or Time object. See
- *	    Apache::Cookie#expires for a listing of format options. The default is
- *	    +nil+.
- *	 :domain
- *	    Sets the domain field to the given value. The default is nil. 
- *	 :path
- *	    Sets the path field to the given value. The default path is derived from
- *	    the requested uri.
- *	 :secure
- *	    Sets the secure field to +true+ or +false+.
+ * attributes.
+ * 
+ * @param [Apache::Request] req  the request the cookie is associated with
+ * @param [Hash] options         the cookie values
+ * @option options [String] :name           Sets the name field to the given value. 
+ * @option options [String] :value          Adds the value to the values field. 
+ * @option options [String, Time] :expires  Sets the expires field to the calculated 
+ *                                          date String or Time object. See 
+ *                                          Apache::Cookie#expires for a listing of 
+ *                                          format options. The default is +nil+.
+ * @option options [String] :domain         (nil) Sets the domain field to the given value.
+ * @option options [String] :path           Sets the path field to the given value. The 
+ *                                          default path is derived from the requested uri.
+ * @option options [boolean] :secure        Sets the secure field to +true+ or +false+.
+ * @return [Apache::Cookie]  the new cookie object
  */
 static VALUE cookie_init( int argc, VALUE *argv, VALUE self )
 {
@@ -424,8 +410,6 @@ static VALUE cookie_init( int argc, VALUE *argv, VALUE self )
 
 
 /*
- * bake
- * --
  * Add the cookie to the output headers of the request to which it belongs.
  */
 static VALUE cookie_bake( VALUE self )
@@ -437,31 +421,14 @@ static VALUE cookie_bake( VALUE self )
 
 
 /*
- * to_s
- * --
- * Returns the cookie as a String.
+ * Stringify the cookie.
+ * @return [String] the cookie as a String
  */
 static VALUE cookie_to_s( VALUE self )
 {
     ApacheCookie *cookie = get_cookie( self );
     return rb_tainted_str_new2( ApacheCookie_as_string(cookie) );
 }
-
-
-
-
-
-/* --- End of stuff from table.c ------------------------------ */
-
-
-#ifndef HAVE_RB_DEFINE_ALLOC_FUNC
-static VALUE cookie_s_new(int argc, VALUE *argv, VALUE klass)
-{
-    VALUE obj = cookie_s_alloc(klass);
-    cookie_init(argc, argv, obj);
-    return obj;
-}
-#endif
 
 
 /* Module initializer */
@@ -489,12 +456,7 @@ void rb_init_apache_cookie()
 
 
     /* Allocator */
-#ifdef HAVE_RB_DEFINE_ALLOC_FUNC
     rb_define_alloc_func( rb_cApacheCookie, cookie_s_alloc );
-#else
-    rb_define_singleton_method( rb_cApacheCookie, "allocate", cookie_s_alloc, 0 );
-    rb_define_singleton_method(rb_cApacheCookie, "new", cookie_s_new, -1);
-#endif
 
     /* Instance methods */
     rb_define_method( rb_cApacheCookie, "initialize", cookie_init, -1 );

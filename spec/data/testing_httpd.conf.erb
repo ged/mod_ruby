@@ -9,20 +9,30 @@ AcceptMutex posixsem
 ServerName localhost
 DocumentRoot /tmp
 
+KeepAlive off
+MaxClients 5
+GracefulShutDownTimeout 2
+
 LoadModule ruby_module ext/mod_ruby.so
 
+# TODO: Check 'HTTPD_ROOT="/opt/local/apache2"' in the output of `httpd -V` to get the
+# path to the module directory.
+LoadModule status_module /opt/local/apache2/modules/mod_status.so
 LoadModule log_config_module /opt/local/apache2/modules/mod_log_config.so
 LogFormat "%h %l %u %t \"%r\" %>s %b \"%{Referer}i\" \"%{User-Agent}i\"" combined
 CustomLog <%= TEST_DATADIR + 'access.log' %> combined
 
 LogLevel debug
 
-ErrorLog <%= TEST_DATADIR + 'error.log' %>
-PidFile <%= TEST_DATADIR + 'httpd.pid' %>
+ErrorLog <%= ERRORLOG %>
+PidFile <%= PIDFILE %>
 
 RubyAddPath <%= LIBDIR %>
 RubyAddPath <%= EXTDIR %>
 RubyAddPath <%= SPEC_LIBDIR %>
 
-Include <%= TEST_DATADIR + 'handlers.conf' %>
+Include <%= CONFIG_INCLUDE_FILE %>
 
+# <Location /server-status>
+# 	SetHandler server-status
+# </Location>
