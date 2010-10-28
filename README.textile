@@ -1,0 +1,80 @@
+h1. mod_ruby
+
+This is a *very* experimental fork of mod_ruby. I've been using mod_ruby for about 6 years for my own projects, and I love it, but it has languished somewhat in recent years. I told Shugo (the author of the real version) that I'd help him out a few years ago, but up until recently I haven't come through on my promise. With this fork, I aim to change that.
+
+I mean to accomplish several things with my fork, with the eventual goal of hopefully getting them merged back into the official version as Shugo deems appropriate. These goals are (in no particular order):
+
+* packaging/distribution
+  - make it distributable as a Rubygem [done]
+  - add support for installation of handlers as gems
+* documentation
+  - replace the RD API documentation with YARD documentation [15%]
+  - bring the existing RD documentation up to date and teach YARD how to parse it with rdtool
+  - add at least one example of each kind of Apache handler implemented in Ruby. Possibly porting
+    examples from mod_perl and/or mod_python.
+  - add at least three examples of how to use the BucketBrigade
+  - investigate ways to add m17n support to YARD, and provide appropriate 
+    placeholders. Also: learn Japanese so I can do it myself, but that's
+    likely to take a while.
+* testing
+  - add a unit-testing framework based on RSpec 2 [99%]
+  - add tests using the framework [15%]
+  - figure out how to make gcov generate coverage statistics for tests
+* modernization
+  - make any necessary changes to run it under Ruby 1.9.2 and 1.8.7 [done]
+  - add support for Ruby's m17n where appropriate (default encoding, etc.)
+  - remove support for EOL Apache versions (i.e., earlier than 2.2)
+  - add support for "Apache 2.4":apache24 when it's released
+    • support the @check_config@ hook
+    • steal features from mod_lua :)
+  - remove ifdefs and workarounds for older versions of Apache/Ruby to make 
+    documentation/testing/maintenance easier, and to reduce fragility. [10%]
+  - implement a configuration system like mod_perl's that allows Apache to
+    be configured using a Ruby DSL
+
+
+h2. What is mod_ruby?
+
+mod_ruby embeds the Ruby interpreter into the Apache web server, allowing one to write Apache handlers in pure Ruby. Oh, and it also speeds up CGIs, but that's not nearly as interesting. ;)
+
+
+h2. Required environment
+
+* Ruby version 1.8.7 or 1.9.2
+* Apache version 2.2.15 or later
+
+
+h2. Installation
+
+This is just an experimental version of mod_ruby, and it's not recommended that you actually use it for anything serious. Use the "latest stable release":http://modruby.net/archive/ instead. I know it's old, but it's quite usable still. 
+
+If you do want to play around with this version anyway, you can build the module like so:
+
+    $ rake compile -- \
+        --with-apr-includes=/path/to/apr/headers \
+        --with-apxs=/path/to/apxs
+
+That will create the module in @ext/mod_ruby.so@. You can copy that to your server's modules directory and then load it as suggested in @examples/httpd.conf@. You'll also have to copy the stuff in @lib@ to your @site_lib@ manually. This will be rectified in the future.
+
+
+h2. Running the tests
+
+The testing environment is a bit hacked-together at the moment. If you're not running on a Mac as I am, you'll have to edit the @LoadModule@ line in @spec/data/testing_httpd.conf.erb@ to point to wherever your modules directory is. I'll fix this at some point soon using @apxs -q LIBEXECDIR@.
+
+After you've done that, you should be able to do:
+
+    $ rake spec
+
+If you haven't yet compiled the module, you'll need to append the compilation flags as in the @rake compile@ line described above.
+
+This will use whichever @httpd@ binary is first in your PATH, so you'll want to adjust that if it's not the one you want to use. 
+
+
+h2. Official Web Site
+
+* http://modruby.net/
+
+
+
+[apache24]http://httpd.apache.org/docs/trunk/new_features_2_4.html
+
