@@ -9,7 +9,7 @@ I mean to accomplish several things with my fork, with the eventual goal of hope
 ** add support for installation of handlers as gems
 * documentation
 ** replace the RD API documentation with YARD documentation [15%]
-** bring the existing RD documentation up to date and teach YARD how to parse it with rdtool
+** bring the existing (non-API) RD documentation up to date and teach YARD how to parse it with rdtool
 ** add at least one example of each kind of Apache handler implemented in Ruby. Possibly porting examples from mod_perl and/or mod_python.
 ** add at least three examples of how to use the BucketBrigade
 ** investigate ways to add m17n support to YARD, and provide appropriate placeholders. Also: learn Japanese so I can do it myself, but that's likely to take a while.
