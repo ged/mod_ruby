@@ -18,7 +18,7 @@ LoadModule ruby_module ext/mod_ruby.so
 # TODO: Check 'HTTPD_ROOT="/opt/local/apache2"' in the output of `httpd -V` to get the
 # path to the module directory.
 # LoadModule status_module /opt/local/apache2/modules/mod_status.so
-LoadModule log_config_module /opt/local/apache2/modules/mod_log_config.so
+LoadModule log_config_module /usr/libexec/apache2/mod_log_config.so
 LogFormat "%h %l %u %t \"%r\" %>s %b \"%{Referer}i\" \"%{User-Agent}i\"" combined
 CustomLog <%= TEST_DATADIR + 'access.log' %> combined
 
