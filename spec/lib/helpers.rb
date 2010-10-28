@@ -21,6 +21,10 @@ LOG_LEVELS = {
 
 module Apache
 
+	# Globals lazily extracted from the environment
+	$httpd_version = $apxs_vars = nil
+
+
 	### Generator for handler configuration files + the handlers themselves.
 	class HandlerConfig
 		include Apache::TestConstants
@@ -124,6 +128,12 @@ module Apache
 
 		# Paths to programs in the PATH (@see #which)
 		PROGRAM_PATHS         = {}
+
+		# The settings that 'apxs' knows about
+		APXS_VARS             = %w[
+			CC CFLAGS CFLAGS_SHLIB INCLUDEDIR LD_SHLIB LDFLAGS_SHLIB 
+			LIBEXECDIR LIBS_SHLIB SBINDIR SYSCONFDIR TARGET
+		  ]
 
 		# The number of seconds to wait for processes to spin up and die off
 		PROCESS_TIMEOUT       = 15.0
@@ -293,11 +303,26 @@ module Apache
 
 		### Get the version string from Apache.
 		def get_apache_version
-			httpd = which( 'httpd' ).to_s
-			version_output  = IO.read('|-') or exec httpd, '-v'
-			trace "version output: \n#{version_output.inspect}"
-			return version_output[ %r{Server version: Apache/(\d+\.\d+\.\d+)}, 1 ].
-				split('.').collect {|char| char.to_i }.pack('N*')
+			unless $httpd_version
+				httpd = which( 'httpd' )
+				version_output  = %x:#{httpd} -v:
+				trace "version output: \n#{version_output.inspect}"
+				$httpd_version = version_output[ %r{Server version: Apache/(\d+\.\d+\.\d+)}, 1 ].
+					split('.').collect {|char| char.to_i }.pack('N*')
+			end
+			return $httpd_version
+		end
+
+
+		### Get the compilation 
+		def get_apxs_vars
+			unless $apxs_vars
+				apxs = which( 'apxs' )
+				vars = %x:#{apxs} -q #{APXS_VARS.join(' ')}:.chomp.split( /\s*;\s*/ )
+				trace "apxs vars: \n#{vars.inspect}"
+				$apxs_vars = Hash[ [APXS_VARS.map(&:to_sym), vars].transpose ]
+			end
+			return $apxs_vars
 		end
 
 
@@ -354,6 +379,9 @@ module Apache
 
 			log "Setting up test httpd for %s tests" % [ description ]
 			TEST_DATADIR.mkpath
+
+			# Get some config variables from 'apxs'
+			apxs_vars = get_apxs_vars()
 
 			# Write the config file, expanded from an ERB template
 			template = load_template( HTTPD_CONF_TEMPLATE )
