@@ -119,10 +119,150 @@ describe Apache::Request do
 
 		requesting( '/' ).with_form_parameters( :time => '20:15', :bar => "High Five Bar" ).
 			should respond_with( HTTP_OK ).
-				and_body( /Type: Apache::Table/ ).
+				and_body( /Type: Hash/ ).
 				and_body( /"bar"=>\["High Five Bar"\]/ ).
 				and_body( /"time"=>\["20:15"\]/ )
 	end
+
+	it "returns an empty Hash from #all_params if there are no request parameters" do
+		install_handlers do
+			rubyhandler( '/', <<-END_CODE )
+				params = req.all_params
+				req.puts "Type: \#{params.class.name}" 
+				req.puts( params.inspect )
+				req.content_type = 'text/plain'
+				return Apache::OK
+			END_CODE
+		end
+
+		requesting( '/' ).with_form_parameters( :time => '20:15', :bar => "High Five Bar" ).
+			should respond_with( HTTP_OK ).
+				and_body( /Type: Hash/ ).
+				and_body( /"bar"=>\["High Five Bar"\]/ ).
+				and_body( /"time"=>\["20:15"\]/ )
+	end
+
+
+	it "knows which directory options have been enabled for the requested URI" do
+		handler = <<-END_CODE
+			unless (req.allow_options & (Apache::OPT_EXECCGI|Apache::OPT_INDEXES)).nonzero?
+			    req.log_reason( "ExecCGI and/or Indexes are off in this directory",
+			           req.filename )
+			    return Apache::FORBIDDEN
+			end
+			req.server.log_debug "Opts are: %d" % [ req.allow_options ]
+			req.content_type = 'text/plain'
+			req.puts "Allowed?"
+			return Apache::OK
+		END_CODE
+
+		config = <<-END_CONFIG
+			Options None
+		END_CONFIG
+
+		install_handlers do
+			rubyhandler( '/secret_subdir', handler, config )
+		end
+
+		requesting( '/secret_subdir' ).should respond_with( FORBIDDEN )
+	end
+
+
+	it "knows which HTTP methods are allowed for the requested URI" do
+		pending "figuring out why .allowed isn't working" do
+			handler = <<-END_CODE
+				req.allowed = 0 | (1 << Apache::M_POST)
+				req.server.log_debug( "Allowed methods mask is: %0b (%d)" % [req.allowed, req.allowed] )
+				return Apache::METHOD_NOT_ALLOWED
+			END_CODE
+
+			install_handlers do
+				rubyhandler( '/', handler )
+			end
+
+			options_for( '/' ).should respond_with( HTTP_OK ).
+				and_header( 'Allow', /TRACE/ ).
+				and_header( 'Allow', /PORN/ )
+		end
+	end
+
+
+	it "knows what the query string is" do
+		handler = <<-END_CODE
+			req.puts( req.args )
+			req.content_type = 'text/plain'
+			return Apache::OK
+		END_CODE
+
+		install_handlers do
+			rubyhandler( '/', handler )
+		end
+
+		requesting( '/?purple=monkey&finger' ).should respond_with( HTTP_OK ).
+			and_body( 'purple=monkey&finger' )
+	end
+
+
+	it "can respond to an 0.9 \"simple\" request" do
+		handler = <<-END_CODE
+			req.assbackwards = true
+			req.puts "HTTP/1.0 200 Yep",
+				"Content-type: text/plain",
+				"Connection: close",
+				"X-Funky-Shit: yes",
+				'',
+				"Oh my god that's the funky shit!"
+			return Apache::OK
+		END_CODE
+
+		install_handlers do
+			rubyhandler( '/', handler )
+		end
+
+		requesting( '/' ).should respond_with( HTTP_OK ).
+			and_body( %{Oh my god that's the funky shit!} ).
+			and_header( 'X-Funky-Shit', 'yes' ).
+			not_header( 'Content-length' )
+	end
+
+
+	it "can store arbitrary attributes in the request" do
+		handler = <<-END_CODE
+			req.attributes[:monkeyfinger] = :yes
+			req.puts( req.attributes.inspect )
+			req.content_type = 'text/plain'
+			return Apache::OK
+		END_CODE
+
+		install_handlers do
+			rubyhandler( '/', handler )
+		end
+
+		requesting( '/' ).should respond_with( HTTP_OK ).
+			and_body( /\{:monkeyfinger=>:yes\}/ )
+	end
+
+	it "can store arbitrary attributes in the request" do
+		handler = <<-END_CODE
+			req.auth_name += " Employees"
+			req.auth_type = "Basic"
+			req.note_auth_failure
+			return Apache::HTTP_UNAUTHORIZED
+		END_CODE
+
+		config = <<-END_CONFIG
+			AuthType basic
+			AuthName "Sekrit Pickle Factory"
+		END_CONFIG
+
+		install_handlers do
+			rubyhandler( '/pickle_info', handler, config )
+		end
+
+		requesting( '/pickle_info' ).should respond_with( HTTP_UNAUTHORIZED ).
+			and_header( 'WWW-Authenticate', /pickle factory employees/i )
+	end
+
 
 
 end

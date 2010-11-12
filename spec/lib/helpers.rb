@@ -56,8 +56,8 @@ module Apache
 
 		### Install a RubyHandler at the specified +url+ with the body of the
 		### #handle method containing the specified +code+.
-		def rubyhandler( url, code )
-			self.handlers[ :rubyhandler ] << [ url, code ]
+		def rubyhandler( url, code, location_config=nil )
+			self.handlers[ :rubyhandler ] << [ url, code, location_config ]
 		end
 
 
@@ -88,7 +88,7 @@ module Apache
 
 		### Write out the Ruby source for the specified RubyHandler, and return the config
 		### that points to it.
-		def write_rubyhandler( url, code )
+		def write_rubyhandler( url, code, location_config=nil )
 			@handler_counter += 1
 			handlerfile = TEST_DATADIR + "rubyhandler%d.rb" % [ @handler_counter ]
 			handlerclass = "TestRubyHandler%d" % [ @handler_counter ]
@@ -103,6 +103,7 @@ module Apache
 			return %{
 				RubyRequire #{handlerfile}
 				<Location #{url}>
+					#{location_config || ''}
 					SetHandler ruby-object
 					RubyHandler #{handlerclass}
 				</Location>

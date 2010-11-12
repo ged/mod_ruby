@@ -369,6 +369,7 @@ void rb_init_apache()
     rb_define_const(rb_mApache, "M_INVALID", INT2NUM(M_INVALID));
     rb_define_const(rb_mApache, "METHODS", INT2NUM(METHODS));
 
+    /* Apache directory option constants */
     rb_define_const(rb_mApache, "OPT_NONE", INT2NUM(OPT_NONE));
     rb_define_const(rb_mApache, "OPT_INDEXES", INT2NUM(OPT_INDEXES));
     rb_define_const(rb_mApache, "OPT_INCLUDES", INT2NUM(OPT_INCLUDES));

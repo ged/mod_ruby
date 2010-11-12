@@ -486,9 +486,6 @@ static VALUE request_puts(int argc, VALUE *argv, VALUE out)
 }
 
 /*
- * call-seq:
- *    req << string   -> req
- *
  * Does the same thing as Apache::Request#write, but returns the request
  * object.
  * 
@@ -609,6 +606,58 @@ static VALUE request_main(VALUE self)
     data = get_request_data(self);
     return rb_get_request_object(data->request->main);
 }
+
+/* 
+ * Document-method: 
+ *    req.allowed -> int
+ *    req.allowed = int
+ * 
+ * A bitvector of the allowed methods.
+ * 
+ * A handler must ensure that the request method is one that it is
+ * capable of handling. Generally your handler should DECLINE any request
+ * methods it does not handle, and set +r.allowed+ to the list of methods 
+ * that it is willing to handle. This bitvector is used to construct the
+ * "Allow:" header required for OPTIONS requests, and +HTTP_METHOD_NOT_ALLOWED+
+ * and +HTTP_NOT_IMPLEMENTED+ status codes.
+ * 
+ * Since the +default_handler+ deals with OPTIONS, all modules can usually
+ * decline to deal with OPTIONS. TRACE is always allowed, modules don't
+ * need to set it explicitly.
+ * 
+ * Since the default_handler will always handle a GET, a module which
+ * does *not* implement GET should probably return HTTP_METHOD_NOT_ALLOWED.
+ * Unfortunately this means that a Script GET handler can't be installed
+ * by mod_actions.
+ * 
+ */
+
+
+/*
+ * Document-methods:
+ *    req.args -> string
+ *    req.args = string
+ *
+ * Get/set the query arguments part of the request URI.
+ * @param
+ * @return [String]  the query arguments
+ * 
+ */
+
+/*
+ * call-seq:
+ *    req.assbackwards?   -> true or false
+ *    req.assbackwards = true or false
+ *
+ * Indicates an HTTP/0.9 ``simple'' request. This means that the response will contain 
+ * no headers, only the body. Although this exists for backwards compatibility with 
+ * obsolete browsers, some people have figured out that setting assbackwards 
+ * can be a useful technique when including part of the response from an internal 
+ * redirect to avoid headers being sent.
+ *
+ *    example code
+ */
+
 
 REQUEST_STRING_ATTR_READER(request_protocol, protocol);
 REQUEST_STRING_ATTR_READER(request_hostname, hostname);
@@ -914,6 +963,11 @@ static VALUE request_parsed_uri(VALUE self)
     return data->parsed_uri;
 }
 
+/*
+ * Arbitrary Hash of values that will be passed between handlers, and garbage-collected
+ * when the request is done.
+ * @return [Hash]  the Hash of request attributes
+ */
 static VALUE request_attributes(VALUE self)
 {
     request_data *data;
@@ -1060,6 +1114,24 @@ static VALUE request_binmode(VALUE self)
     return Qnil;
 }
 
+/* 
+ * Returns a bitmask that specifies what options are enabled for the directory to which the 
+ * request has been mapped. You can use the Apache module's options bitmask constants 
+ * (+Apache::OPT_*+) to test for desired values.
+ * 
+ * @return [Integer] the options bitmask
+ * @example
+ *   include Apache
+ * 
+ *   # Make sure that ExecCGI and Indexes are turned on for the Location
+ *   # being served:
+ *   unless ( req.allow_options & OPT_EXECCGI|OPT_INDEXES )
+ *       req.log_reason( "ExecCGI and/or Indexes are off in this directory",
+ *   		    req.filename )
+ *       return FORBIDDEN
+ *   end
+ * 
+ */
 static VALUE request_allow_options(VALUE self)
 {
     request_data *data;
@@ -1068,6 +1140,13 @@ static VALUE request_allow_options(VALUE self)
     return INT2NUM(ap_allow_options(data->request));
 }
 
+/*
+ * Returns a bitmask that specifies what options are allowed to be overridden according to the 
+ * value of the AllowOverride directives that apply to this request. Like {#allow_options}, the
+ * value can be tested with the +Apache::OPT_+ constants.
+ *
+ * @return [Integer] the overrides bitmask
+ */
 static VALUE request_allow_overrides(VALUE self)
 {
     request_data *data;
@@ -1312,27 +1391,24 @@ static VALUE request_get_basic_auth_pw(VALUE self)
 }
 
 /*
- * call-seq:
- *    request.add_common_vars
- *
  * Add other Apache CGI variables to the {#subprocess_env} table, in 
  * addition to those added by {#add_cgi_vars}.
  * 
- * @return nil
+ * @return [nil]
  * @example
- *    HTTP_ACCEPT = "text/plain"
- *    HTTP_HOST = "localhost:63093"
- *    PATH = "/bin:/usr/bin"
+ *    DOCUMENT_ROOT    = "/tmp"
+ *    HTTP_ACCEPT      = "text/plain"
+ *    HTTP_HOST        = "localhost:63093"
+ *    PATH             = "/bin:/usr/bin"
+ *    REMOTE_ADDR      = "127.0.0.1"
+ *    REMOTE_PORT      = "56835"
+ *    SCRIPT_FILENAME  = "/tmp/"
+ *    SERVER_ADDR      = "127.0.0.1"
+ *    SERVER_ADMIN     = "[no address given]"
+ *    SERVER_NAME      = "localhost"
+ *    SERVER_PORT      = "63093"
  *    SERVER_SIGNATURE = ""
- *    SERVER_SOFTWARE = "Apache/2.2.15 (Unix) mod_ruby/1.3.0"
- *    SERVER_NAME = "localhost"
- *    SERVER_ADDR = "127.0.0.1"
- *    SERVER_PORT = "63093"
- *    REMOTE_ADDR = "127.0.0.1"
- *    DOCUMENT_ROOT = "/tmp"
- *    SERVER_ADMIN = "[no address given]"
- *    SCRIPT_FILENAME = "/tmp/"
- *    REMOTE_PORT = "56835"
+ *    SERVER_SOFTWARE  = "Apache/2.2.15 (Unix) mod_ruby/1.3.0"
  */
 static VALUE request_add_common_vars(VALUE self)
 {
@@ -1345,18 +1421,16 @@ static VALUE request_add_common_vars(VALUE self)
 
 
 /*
- * call-seq:
- *    request.add_cgi_vars
- *
  * Add the variables required by the CGI/1.1 protocol to the {#subprocess_env} table.
  * 
+ * @return [nil]
  * @example
  *    GATEWAY_INTERFACE = 'CGI/1.1'
- *    SERVER_PROTOCOL   = 'HTTP/1.1'
- *    REQUEST_METHOD    = 'GET'
  *    QUERY_STRING      = ''
+ *    REQUEST_METHOD    = 'GET'
  *    REQUEST_URI       = '/'
  *    SCRIPT_NAME       = ''
+ *    SERVER_PROTOCOL   = 'HTTP/1.1'
  */
 static VALUE request_add_cgi_vars(VALUE self)
 {
@@ -1543,6 +1617,15 @@ static VALUE request_set_auth_type(VALUE self, VALUE val)
     return val;
 }
 
+/*
+ * This routine returns the name of the realm in which the client must be 
+ * authenticated and authorised for the request to be successfully served. 
+ * The string returned is the argument to the corresponding AuthName 
+ * directive.
+ * 
+ * If there is no applicable realm, +nil+ is returned.
+ *
+ */
 static VALUE request_auth_name(VALUE self)
 {
     request_data *data;
@@ -1847,7 +1930,7 @@ static VALUE request_options(VALUE self)
 
 /*
  * call-seq:
- *    Apache::Request.libapreq?   -> true
+ *    Apache::Request.libapreq?   -> boolean
  *
  * Returns +true+ if mod_ruby has been compiled with the Apache Request library.
  * @deprecated This is no longer necessary, as libapreq support is built into mod_ruby itself.
@@ -2086,7 +2169,7 @@ static VALUE request_params(VALUE self, VALUE key)
 
 
 /*
- * Iterator function: makes the Apache::Table for #all_params
+ * Iterator function: makes the Hash for #all_params
  */
 static int make_all_params(void *data, const char *key, const char *val)
 {
@@ -2105,13 +2188,9 @@ static int make_all_params(void *data, const char *key, const char *val)
 
 
 /*
- * call-seq:
- *    request.all_params   -> table
- *
- * Fetch all request parameters.
+ * Fetch all request parameters as a Hash of Arrays keyed by parameter name.
  * 
- * @return [Hash<String => String>]  the request parameters
- * 
+ * @return [Hash<String => Array>]  the request parameters
  */
 static VALUE request_all_params(VALUE self, VALUE key)
 {

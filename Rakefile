@@ -49,12 +49,14 @@ PKG_FILE_NAME = "#{PKG_NAME.downcase}-#{PKG_VERSION}"
 GEM_FILE_NAME = "#{PKG_FILE_NAME}.gem"
 
 TEXT_FILES    = Rake::FileList.new( %w[Rakefile ChangeLog COPYING LEGAL LICENSE.apreq 
-                                       NOTICE README*] )
+                                       NOTICE *.textile] )
 BIN_FILES     = Rake::FileList.new( "#{BINDIR}/*" )
 LIB_FILES     = Rake::FileList.new( "#{LIBDIR}/**/*.rb" )
 EXT_FILES     = Rake::FileList.new( "#{EXTDIR}/**/*.{c,h}" )
 BUILD_FILES   = Rake::FileList.new( "#{EXTDIR}/**/*.{rb,in,tmpl,libdir,module}" )
 DATA_FILES    = Rake::FileList.new( "#{DATADIR}/**/*" )
+DOC_FILES     = Rake::FileList.new( "#{BASEDIR}/**/*.textile", 'NOTICE',
+                                    'LICENSE.apreq', 'COPYING', 'LEGAL', 'ChangeLog' )
 
 SPECDIR       = BASEDIR + 'spec'
 SPECLIBDIR    = SPECDIR + 'lib'
@@ -85,7 +87,8 @@ CONFIGURE      = EXTDIR + 'configure'
 # English?
 # 
 # If only RDoc supported m17n...
-README_FILE = ((ENV['LANG'] || '') =~ /\bja\b/) ? 'README.ja' : 'README.en'
+# README_FILE = ((ENV['LANG'] || '') =~ /\bja\b/) ? 'README.ja' : 'README.en'
+README_FILE = 'README.textile'
 
 # Options for RDoc documentation
 RDOC_OPTIONS = [
@@ -104,7 +107,7 @@ YARD_OPTIONS = [
 	'--hide-void-return',
 	'-r', README_FILE,
 	'--exclude', 'rails_dispatcher\\.rb',
-	'--files', 'COPYING,LEGAL,NOTICE,README.en',
+	'--files', DOC_FILES.join(','),
 	'--output-dir', API_DOCSDIR.to_s,
 	'--title', "#{PKG_NAME} #{PKG_VERSION}",
   ]
@@ -148,6 +151,7 @@ GEMSPEC = Gem::Specification.new do |gem|
 		'doc/index.ja.euc.rd',
 		'doc/install.en.rd',
 		'doc/install.ja.euc.rd',
+		'doc/writing-handlers.textile',
 	]
 
 	gem.extensions        = 'ext/configure'
@@ -155,7 +159,7 @@ GEMSPEC = Gem::Specification.new do |gem|
 	gem.files             = RELEASE_FILES
 	gem.test_files        = SPEC_FILES
 
-	gem.requirements << 'Apache >= 1.3.x'
+	gem.requirements << 'Apache >= 2.0.0'
 end
 
 # Append docs/lib to the load path if it exists for documentation
@@ -243,7 +247,7 @@ Gem::PackageTask.new( GEMSPEC ) do |pkg|
 	pkg.need_tar = true
 end
 CLEAN.include( PKGDIR.to_s )
-
+task :gem => [ CONFIGURE_RB.to_s ]
 
 #
 # Documentation tasks
@@ -326,6 +330,7 @@ begin
 		trace "Calling yardoc like:",
 			"  yardoc %s" % [ quotelist(yardoctask.options + yardoctask.files).join(' ') ]
 	}
+	task :apidocs => [ 'ChangeLog' ]
 
 	YARDOC_CACHE = BASEDIR + '.yardoc'
 	CLOBBER.include( YARDOC_CACHE.to_s )

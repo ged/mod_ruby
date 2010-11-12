@@ -94,10 +94,7 @@ describe Apache do
 	it "allows a cookie's value to be set to a single String" do
 		install_handlers do
 			rubyhandler( '/', <<-END_CODE )
-				require 'digest/md5'
-				data = Time.at(1234567890).strftime('%Y/%m/%d %H:%M:%S') + ':127.0.0.1'
-				sess_id = Digest::MD5.hexdigest( data )
-				cookie = Apache::Cookie.new( req, :name => 'session_id', :value => sess_id )
+				cookie = Apache::Cookie.new( req, :name => 'session_id', :value => 'sessionid' )
 
 				cookie.bake
 				req.headers_out['Content-type'] = 'text/plain'
@@ -108,7 +105,7 @@ describe Apache do
 		end
 
 		requesting( '/' ).should respond_with( HTTP_OK ).
-			and_header( 'Set-Cookie', /session_id=ee97f0a63ff684b05856f159549ea3e7/ )
+			and_header( 'Set-Cookie', /session_id=sessionid/ )
 	end
 
 	it "allows a cookie's value to be set to an Array of Strings" do

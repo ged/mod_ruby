@@ -157,6 +157,7 @@ module Apache
 			def initialize( status_code )
 				@expected_code       = status_code
 				@expected_headers    = []
+				@negated_headers	 = []
 				@expected_body       = nil
 				@failure_description = nil
 				@agent               = nil
@@ -173,6 +174,7 @@ module Apache
 
 				return true if self.check_status_match( agent.response ) &&
 					self.check_header_matches( agent.response ) &&
+					self.check_header_negations( agent.response ) &&
 					self.check_body_match( agent.response )
 				return false
 			end
@@ -181,6 +183,13 @@ module Apache
 			### Chainable response header matcher.
 			def and_header( header, value )
 				@expected_headers << [ header, value ]
+				return self
+			end
+
+
+			### Chainable negated header matcher.
+			def not_header( header, value=nil )
+				@negated_headers << [ header, value ]
 				return self
 			end
 
@@ -227,6 +236,32 @@ module Apache
 								break false
 						end
 
+					end
+				end
+			end
+
+
+			### Check the headers of the +response+ for the presense of unwanted headers.
+			def check_header_negations( response )
+				@negated_headers.each do |name, unwanted_value|
+					if unwanted_value.nil? && response.header.key?( name )
+						self.failure_description = "not have a %p header" % [ name ]
+						break false
+					end
+
+					if unwanted_value.is_a?( Regexp )
+						if response.header[ name ] =~ unwanted_value
+							self.failure_description = "not have a %p header matching %p" %
+								[ name, unwanted_value ]
+							break false
+						end
+
+					else
+						if response.header[ name ] == unwanted_value.to_s
+							self.failure_description = "not have a %p header equal to %p" %
+								[ name, unwanted_value ]
+							break false
+						end
 					end
 				end
 			end
@@ -299,7 +334,7 @@ module Apache
 					buf << "#{k}: #{v}\n"
 				end
 				buf << "\n"
-				buf << response.body if response.class.body_permitted?
+				buf << response.body if response.class.body_permitted? && response.body
 
 				return buf
 			end
@@ -322,6 +357,13 @@ module Apache
 		### testing instance of Apache.
 		def posting_to( path, headers={} )
 			return HTTPAgent.new( 'localhost', LISTEN_PORT, path, :post, headers )
+		end
+
+
+		### Make a HTTPAgent that will send an OPTIONS request for the given +path+ to the current
+		### testing instance of Apache.
+		def options_for( path, headers={} )
+			return HTTPAgent.new( 'localhost', LISTEN_PORT, path, :options, headers )
 		end
 
 

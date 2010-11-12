@@ -63,6 +63,11 @@ If you haven't yet compiled the module, you'll need to append the compilation fl
 This will use whichever @httpd@ binary is first in your PATH, so you'll want to adjust that if it's not the one you want to use. 
 
 
+h2. Getting Started
+
+To get started using mod_ruby to write Apache handlers, it's covered in more detail in "writing-handlers":file.writing-handlers.html.
+
+
 h2. Official Web Site
 
 * "http://modruby.net/":http://modruby.net/
