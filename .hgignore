@@ -13,3 +13,5 @@
 ^tmp/
 ^tmp_test_specs/
 ^\.yardoc
+ext/configure\.rb$
+^commit-msg\.txt$

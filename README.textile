@@ -52,9 +52,9 @@ That will create the module in @ext/mod_ruby.so@. You can copy that to your serv
 
 h2. Running the tests
 
-The testing environment is a bit hacked-together at the moment. If you're not running on a Mac as I am, you'll have to edit the @LoadModule@ line in @spec/data/testing_httpd.conf.erb@ to point to wherever your modules directory is. I'll fix this at some point soon using @apxs -q LIBEXECDIR@.
+The tests should detect where your modules directory is, and configure a minimal Apache to use while it's testing, but I've currently only ever run it on a MacOS X box.
 
-After you've done that, you should be able to do:
+Assuming it figures everything out okay, you should be able to do:
 
 bc. $ rake spec
 

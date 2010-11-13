@@ -225,6 +225,7 @@ CLEAN.include( EXT_FILES.pathmap("%X.o") )
 
 desc "Run the unit tests"
 task :spec => 'spec:default'
+task :test => :spec
 
 namespace :spec do
 
@@ -356,16 +357,9 @@ CLEAN.include( API_DOCSDIR.to_s  )
 # Commit tasks -- not done yet.
 #
 
-### Generate a changelog.
-def make_hg_changelog
-	log = IO.read( '|-' ) or exec 'hg', 'log', '--style', 'compact'
-	return log
-end
+require 'rake/hg'
+include MercurialHelpers
 
-def make_git_changelog
-	log = IO.read( '|-' ) or exec 'git', 'log', '--summary', '--stat', '--no-merges', '--date=short'
-	return log
-end
 
 file 'ChangeLog' do |task|
 	$stderr.puts "Updating #{task.name}"
@@ -374,11 +368,12 @@ file 'ChangeLog' do |task|
 	gitdir = BASEDIR + '.git'
 
 	changelog = if gitdir.exist?
-		make_git_changelog()
+		changelog = IO.read( '|-' ) or
+			exec 'git', 'log', '--summary', '--stat', '--no-merges', '--date=short'
 	elsif hgdir.exist?
-		make_hg_changelog()
+		changelog = make_changelog()
 	else
-		"Not a version-controlled directory, no changelog."
+		changelog = "Not a version-controlled directory, no changelog."
 	end
 
 	File.open( task.name, 'w' ) do |fh|

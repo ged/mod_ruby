@@ -2,3 +2,108 @@ h1. Writing Apache Handlers in Ruby with mod_ruby
 
 This is a step-by-step for writing handlers in Ruby.
 
+
+h2. mod_ruby Handler Types
+
+Apache provides a number of hooks for customizing the way it deals with incoming requests, and mod_ruby provides Apache directives for hooking your Ruby code into many of these stages. You can hook mostly everything that the other Apache modules do, resulting in a huge amount of flexibility and control over your server.
+
+This guide will cover each of the directives, explaining when it is called, and showing several examples of how it can be used.
+
+There are also a few other directives to control the environment of the embedded Ruby; for documentation on those, see "Apache Directives":directives.
+
+
+h2. Handlers
+
+The handlers are listed in the order they're executed. 
+
+h3. ChildInitHandler
+
+bc. def child_init( server_request )
+
+_[ed: only tested in the prefork model; still need to test what happens in the other MPMs]_
+
+The ChildInitHandler is a special handler that's invoked when an Apache child first starts up, once per child, which allows you to do any of the work that needs to be done before requests are able to be served. This is useful, for example, to establish connections to a database, set up any expensive data structures, or to load further dependencies.
+
+Note that the @request@ argument that's given to the handler isn't a full @Apache::Request@, as there's no actual request present, but it's populated with all of the server-global data.
+
+Here's an example of establishing a database connection for each child which will later be available to the same handler object for all of the requests it handles:
+
+bc.. #!/usr/bin/env ruby -wKU
+
+require 'pg'
+require 'singleton'
+
+class ChildDbInitHandler
+    include Singleton
+
+    ### Set up a database connection.
+    def child_init( request )
+        @conn = PGconn.connect( "host=localhost dbname=test" )
+        request.server.log_info "Preconnect done: %p" % [ @conn ]
+        return Apache::OK
+    end
+
+    ### Handle content, probably using the database connection.
+    def handler( request )
+        request.content_type = 'text/plain'
+        request.puts "Database connection is: %p" % [ @conn ]
+        return Apache::OK
+    end
+
+end
+
+p. This will connect to the database when the child first starts, and log that it's done so. The Apache config for this will look something like:
+
+bc.. RubyRequire child_db_inithandler
+
+RubyChildInitHandler ChildDbInitHandler.instance
+
+<Location /child_init_preconnect>
+	SetHandler ruby-object
+	RubyHandler ChildDbInitHandler.instance
+</Location>
+
+p. When the server starts up, you'll see log messages like:
+
+bc. [Sat Nov 13 13:41:13 2010] [notice] Apache/2.2.15 (Unix) mod_ruby/1.3.0 Ruby/1.8.7(2009-06-12) configured -- resuming normal operations
+[Sat Nov 13 13:41:13 2010] [info] Server built: Aug 24 2010 11:47:29
+[Sat Nov 13 13:41:13 2010] [debug] prefork.c(1013): AcceptMutex: posixsem (default: sysvsem)
+[Sat Nov 13 13:41:14 2010] [info] Preconnect done: #<PGconn:0x1013331d0>
+[Sat Nov 13 13:41:14 2010] [info] Preconnect done: #<PGconn:0x1013331d0>
+[Sat Nov 13 13:41:14 2010] [info] Preconnect done: #<PGconn:0x1013331d0>
+[Sat Nov 13 13:41:14 2010] [info] Preconnect done: #<PGconn:0x1013331d0>
+[Sat Nov 13 13:41:14 2010] [info] Preconnect done: #<PGconn:0x1013331d0>
+
+
+h3. PostReadRequestHandler post_read_request(#<Apache::Request:0x1020b2798>, [])
+
+_To be done._
+
+h3. TransHandler translate_uri(#<Apache::Request:0x1020b2798>, [])
+
+_To be done._
+
+h3. AccessHandler check_access(#<Apache::Request:0x1020b2798>, [])
+
+_To be done._
+
+h3. TypeHandler find_types(#<Apache::Request:0x1020b2798>, [])
+
+_To be done._
+
+h3. FixupHandler fixup(#<Apache::Request:0x1020b2798>, [])
+
+_To be done._
+
+h3. RubyHandler: handler(#<Apache::Request:0x1020b2798>)
+
+_To be done._
+
+h3. LogHandler log_transaction(#<Apache::Request:0x1020b2798>, [])
+
+_To be done._
+
+h3. CleanupHandler cleanup(#<Apache::Request:0x1020a77d0>, [])
+
+_To be done._
+
