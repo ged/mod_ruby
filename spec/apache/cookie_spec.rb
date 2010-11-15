@@ -195,6 +195,11 @@ describe Apache do
 	end
 
 
+	# These tests are all pretty fragile, as they depend on no more than a second 
+	# between building the response and the execution of the expectation. It's 
+	# frankly amazing that it works as often as it does (which is most of the time
+	# IME). I'll come up with something better, but in the meantime this mostly 
+	# works.
 	context "with a handler that accepts a time delta" do
 
 		before( :all ) do

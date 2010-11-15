@@ -105,8 +105,9 @@ YARD_OPTIONS = [
 	'--no-private',
 	'--protected',
 	'--hide-void-return',
+	# '--asset', (DOCSDIR + 'images').to_s, # This doesn't work as of 0.6.1
 	'-r', README_FILE,
-	'--exclude', 'rails_dispatcher\\.rb',
+	'--exclude', 'lib/apache/rails_dispatcher.rb',
 	'--files', DOC_FILES.join(','),
 	'--output-dir', API_DOCSDIR.to_s,
 	'--title', "#{PKG_NAME} #{PKG_VERSION}",
@@ -289,6 +290,7 @@ begin
 	class YARD::RegistryStore; include YardGlobals; end
 	class YARD::Docstring; include YardGlobals; end
 	module YARD::Templates::Helpers::ModuleHelper; include YardGlobals; end
+	module YARD::Templates::Helpers::HtmlHelper; include YardGlobals; end
 	module YARD::Tags::RefTaglist; include YardGlobals; end
 
 	if vvec(RUBY_VERSION) >= vvec("1.9.1")
@@ -331,6 +333,9 @@ begin
 		trace "Calling yardoc like:",
 			"  yardoc %s" % [ quotelist(yardoctask.options + yardoctask.files).join(' ') ]
 	}
+	yardoctask.after = lambda {
+		FileUtils.cp_r( DOCSDIR + 'images', API_DOCSDIR + 'images', :remove_destination => true )
+	}
 	task :apidocs => [ 'ChangeLog' ]
 
 	YARDOC_CACHE = BASEDIR + '.yardoc'
@@ -345,6 +350,15 @@ rescue LoadError
 		task.rdoc_files.include( DOCFILES )
 		task.rdoc_dir = API_DOCSDIR.to_s
 		task.options  = RDOC_OPTIONS
+	end
+	task :apidocs do
+		puts '*' * 80,
+			'The API documentation has been formatted for YARD (http://yardoc.org/), so ',
+			'it might look a bit strange. It will still work, but it\'ll have yard-style ',
+			'@directives in it.',
+			'',
+			'To get nicer output, just "gem install yard".',
+			'*' * 80
 	end
 end
 

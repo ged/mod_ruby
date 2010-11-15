@@ -141,9 +141,7 @@ static int ruby_access_handler(request_rec *r);
 static int ruby_type_handler(request_rec *r);
 static int ruby_fixup_handler(request_rec *r);
 static int ruby_log_handler(request_rec *r);
-#ifndef APACHE2 /* Apache 1.x */
-static int ruby_header_parser_handler(request_rec *r);
-#endif
+
 static int ruby_post_read_request_handler(request_rec *r);
 
 #ifndef AP_INIT_TAKE1
@@ -196,10 +194,8 @@ static const command_rec ruby_cmds[] = {
      "set fixup handler object"),
     AP_INIT_TAKE1("RubyLogHandler", ruby_cmd_log_handler, NULL, OR_ALL,
      "set log handler object"),
-#ifdef APACHE2
     AP_INIT_TAKE1("RubyErrorLogHandler", ruby_cmd_error_log_handler, NULL, OR_ALL,
      "set log handler object"),
-#endif
     AP_INIT_TAKE1("RubyHeaderParserHandler", ruby_cmd_header_parser_handler,
      NULL, OR_ALL,
      "set header parser object"),
@@ -218,7 +214,6 @@ static const command_rec ruby_cmds[] = {
     {NULL}
 };
 
-#ifdef APACHE2
 
 static int ruby_startup(pool*, pool*, pool*, server_rec*);
 static void ruby_child_init(pool*, server_rec*);
@@ -236,9 +231,7 @@ static void ruby_register_hooks(pool *p)
     ap_hook_type_checker(ruby_type_handler, NULL, NULL, APR_HOOK_MIDDLE);
     ap_hook_fixups(ruby_fixup_handler, NULL, NULL, APR_HOOK_MIDDLE);
     ap_hook_log_transaction(ruby_log_handler, NULL, NULL, APR_HOOK_MIDDLE);
-#ifdef APACHE2
     ap_hook_error_log(ruby_error_log_handler, NULL, NULL, APR_HOOK_MIDDLE);
-#endif
     ap_hook_child_init(ruby_child_init, NULL, NULL, APR_HOOK_MIDDLE);
     ap_hook_post_read_request(ruby_post_read_request_handler,
 			      NULL, NULL, APR_HOOK_MIDDLE);
@@ -255,47 +248,6 @@ module AP_MODULE_DECLARE_DATA ruby_module =
     ruby_register_hooks		/* register hooks */
 };
 
-#else /* Apache 1.x */
-
-static void ruby_startup(server_rec*, pool*);
-static void ruby_child_init(server_rec*, pool*);
-
-static const handler_rec ruby_handlers[] =
-{
-    {RUBY_OBJECT_HANDLER, ruby_object_handler},
-    {NULL}
-};
-
-MODULE_VAR_EXPORT module ruby_module =
-{
-    STANDARD_MODULE_STUFF,
-    ruby_startup,		/* initializer */
-    ruby_create_dir_config,	/* dir config creater */
-    ruby_merge_dir_config,	/* dir merger --- default is to override */
-    ruby_create_server_config,	/* create per-server config structure */
-    ruby_merge_server_config,	/* merge server config */
-    ruby_cmds,			/* command table */
-    ruby_handlers,		/* handlers */
-    ruby_trans_handler,		/* filename translation */
-    ruby_authen_handler,	/* check_user_id */
-    ruby_authz_handler,		/* check auth */
-    ruby_access_handler,	/* check access */
-    ruby_type_handler,		/* type_checker */
-    ruby_fixup_handler,		/* fixups */
-    ruby_log_handler,		/* logger */
-    ruby_header_parser_handler,	/* header parser */
-    ruby_child_init,		/* child_init */
-    NULL,			/* child_exit */
-    ruby_post_read_request_handler,	/* post read-request */
-#ifdef EAPI
-    NULL,			/* add_module */
-    NULL,			/* remove_module */
-    NULL,			/* rewrite_command */
-    NULL,			/* new_connection */
-    NULL			/* close_connection */
-#endif /* EAPI */
-};
-#endif
 
 #define STRING_LITERAL(s) rb_str_new(s, sizeof(s) - 1)
 #define STR_CAT_LITERAL(str, s) rb_str_cat(str, s, sizeof(s) - 1)
@@ -503,11 +455,7 @@ void ruby_log_error(const char *file, int line, int level,
 
     va_start(args, fmt);
     vsnprintf(buf, BUFSIZ, fmt, args);
-#ifdef APACHE2
     ap_log_error(file, line, level, 0, s, "mod_ruby: %s", buf);
-#else
-    ap_log_error(file, line, level, s, "mod_ruby: %s", buf);
-#endif
     va_end(args);
 }
 
@@ -599,7 +547,6 @@ static void ruby_add_path(const char *path)
     rb_ary_push(default_load_path, rb_str_new2(path));
 }
 
-#ifdef APACHE2
 
 static int ruby_startup(pool *p, pool *plog, pool *ptemp, server_rec *s)
 {
@@ -618,22 +565,6 @@ static int ruby_startup(pool *p, pool *plog, pool *ptemp, server_rec *s)
     return OK;
 }
 
-#else /* Apache 1.x */
-
-static void ruby_startup(server_rec *s, pool *p)
-{
-    ap_add_version_component(MOD_RUBY_STRING_VERSION);
-#if RUBY_RELEASE_CODE > 20040624
-    {
-        char *version = ap_pstrcat(p, "Ruby/", ruby_version,
-                                   "(", ruby_release_date, ")",
-				   (char *) NULL);
-        ap_add_version_component(version);
-    }
-#endif
-}
-
-#endif
 
 #ifdef POSIX_SIGNAL
 #define ruby_signal(sig,handle) posix_signal((sig),(handle))
@@ -700,13 +631,12 @@ static void ruby_init_interpreter(server_rec *s)
 #if RUBY_VERSION_CODE < 180
     orig_defout = rb_defout;
 #endif
-#ifdef APACHE2
+
     rb_protect_funcall(rb_stderr, rb_intern("sync="), NULL, 1, Qtrue);
-#endif
 
     ruby_init_loadpath();
 #ifdef RUBY_VM
-#ifndef USE_SYMBOL_AS_METHOD_NAME /* 1.9.2 */
+#ifndef USE_SYMBOL_AS_METHOD_NAME /* 1.9.0 or 1.9.1 */
     Init_prelude();
 #endif
 #endif
@@ -877,11 +807,7 @@ static request_rec *fake_request_rec(server_rec *s, pool *p, char *hook)
 
 static int ruby_handler(request_rec *, array_header *, error_log_data *, ID, int, int);
 
-#ifdef APACHE2
 static void ruby_child_init(pool *p, server_rec *s)
-#else /* Apache 1.x */
-static void ruby_child_init(server_rec *s, pool *p)
-#endif
 {
     ruby_server_config *conf;
     request_rec *r;
@@ -1287,9 +1213,6 @@ static void *ruby_handler_internal(handler_internal_arg_t *iarg)
     int i, handlers_len;
     char **handlers;
     int timeout;
-#ifndef APACHE2
-    static int warned_timeout = 0;
-#endif
 
     sconf = get_server_config(r->server);
     dconf = get_dir_config(r);
@@ -1306,16 +1229,6 @@ static void *ruby_handler_internal(handler_internal_arg_t *iarg)
 	arg.mid = mid;
 	ap_soft_timeout("call ruby handler", r);
 	timeout = sconf->timeout;
-#ifndef APACHE2
-	if (timeout >= r->server->timeout) {
-	    if (!warned_timeout)
-		ruby_log_error(APLOG_MARK, APLOG_WARNING | APLOG_NOERRNO,
-			       r->server,
-			       "disabled RubyTimeOut: RubyTimeOut >= TimeOut");
-	    timeout = 0;
-	    warned_timeout = 1;
-	}
-#endif
 	if ((state = run_safely(safe_level, timeout,
 				ruby_handler_0, &arg, &ret)) == 0) {
 	    iarg->retval = NUM2INT(ret);
@@ -1380,17 +1293,13 @@ static int ruby_object_handler(request_rec *r)
     int retval;
     ruby_dir_config *dconf;
     
-#ifdef APACHE2
     if (strcmp(r->handler, RUBY_OBJECT_HANDLER) != 0) {
 	return DECLINED;
     }
-#endif
     dconf = get_dir_config(r);
     retval = ruby_handler(r, dconf->ruby_handler, NULL, rb_intern("handler"), 0, 1);
-#ifdef APACHE2
     if (retval == DECLINED && r->finfo.filetype == APR_DIR)
         r->handler = DIR_MAGIC_TYPE;
-#endif
     return retval;
 }
 
@@ -1456,25 +1365,6 @@ static int ruby_log_handler(request_rec *r)
 			rb_intern("log_transaction"), 1, 0);
 }
 
-#ifndef APACHE2 /* Apache 1.x */
-static int ruby_header_parser_handler(request_rec *r)
-{
-    ruby_dir_config *dconf = get_dir_config(r);
-    int retval;
-
-    if (dconf->ruby_init_handler &&
-	ap_table_get(r->notes, "ruby_init_ran") == NULL) {
-	retval = ruby_handler(r, dconf->ruby_init_handler, NULL,
-			      rb_intern("init"), 1, 0);
-	if (retval != OK && retval != DECLINED)
-	    return retval;
-    }
-    if (dconf->ruby_header_parser_handler == NULL) return DECLINED;
-    return ruby_handler(r, dconf->ruby_header_parser_handler, NULL,
-			rb_intern("header_parse"), 1, 0);
-}
-#endif
-
 static APR_CLEANUP_RETURN_TYPE ruby_cleanup_handler(void *data)
 {
     request_rec *r = (request_rec *) data;
@@ -1504,7 +1394,6 @@ static int ruby_post_read_request_handler(request_rec *r)
 			rb_intern("post_read_request"), 1, 0);
 }
 
-#ifdef APACHE2
 static void ruby_error_log_handler(const char *file, int line, int level, apr_status_t status, const server_rec *s, const request_rec *r, apr_pool_t *pool, const char *error) {
     ruby_dir_config *dconf;
     error_log_data *e;
@@ -1529,7 +1418,6 @@ static void ruby_error_log_handler(const char *file, int line, int level, apr_st
                  rb_intern("log_error"), 1, 0);
     return;
 }
-#endif
 
 /*
  * Local variables:

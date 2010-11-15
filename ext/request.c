@@ -81,7 +81,6 @@ typedef struct request_data {
 #define REQUEST_STRING_ATTR_READER(fname, member) \
 	DEFINE_STRING_ATTR_READER(fname, request_data, request->member)
 
-#ifdef APACHE2
 #define REQUEST_STRING_ATTR_WRITER(fname, member) \
 static VALUE fname(VALUE self, VALUE val) \
 { \
@@ -93,19 +92,6 @@ static VALUE fname(VALUE self, VALUE val) \
 		    RSTRING_PTR(val), RSTRING_LEN(val)); \
     return val; \
 }
-#else
-#define REQUEST_STRING_ATTR_WRITER(fname, member) \
-static VALUE fname(VALUE self, VALUE val) \
-{ \
-    request_data *data; \
-    Check_Type(val, T_STRING); \
-    data = get_request_data(self); \
-    data->request->member = \
-	ap_pstrndup(data->request->pool, \
-		    RSTRING_PTR(val), RSTRING_LEN(val)); \
-    return val; \
-}
-#endif
 
 #define REQUEST_INT_ATTR_READER(fname, member) \
 	DEFINE_INT_ATTR_READER(fname, request_data, request->member)
@@ -291,6 +277,19 @@ static VALUE request_replace(int argc, VALUE *argv, VALUE self)
     return rb_funcall2(data->outbuf, rb_intern("replace"), argc, argv);
 }
 
+/*
+ * Clear the output buffer.
+ * @example Purge anything written to the output buffer if an exception is encountered.
+ * 
+ *   def handler( req )
+ *       ...
+ *   rescue => err
+ *       req.cancel
+ *       req.content_type = 'text/plain' unless req.sent_http_header?
+ *       req.puts "Oops! Something went wrong:"
+ *       return Apache::OK
+ *   end
+ */
 static VALUE request_cancel(VALUE self)
 {
     request_data *data;
@@ -548,6 +547,12 @@ void rb_apache_request_flush(VALUE self)
 }
 
 
+/*
+ * Return the connection object associated with the request.
+ * @return [Apache::Connection]  the connection object
+ * @example Checking the client's IP address
+ *     request.connection.remote_ip  # => "127.0.0.1"
+ */
 static VALUE request_connection(VALUE self)
 {
     request_data *data;
@@ -607,29 +612,9 @@ static VALUE request_main(VALUE self)
     return rb_get_request_object(data->request->main);
 }
 
-/* 
- * Document-method: 
- *    req.allowed -> int
- *    req.allowed = int
- * 
- * A bitvector of the allowed methods.
- * 
- * A handler must ensure that the request method is one that it is
- * capable of handling. Generally your handler should DECLINE any request
- * methods it does not handle, and set +r.allowed+ to the list of methods 
- * that it is willing to handle. This bitvector is used to construct the
- * "Allow:" header required for OPTIONS requests, and +HTTP_METHOD_NOT_ALLOWED+
- * and +HTTP_NOT_IMPLEMENTED+ status codes.
- * 
- * Since the +default_handler+ deals with OPTIONS, all modules can usually
- * decline to deal with OPTIONS. TRACE is always allowed, modules don't
- * need to set it explicitly.
- * 
- * Since the default_handler will always handle a GET, a module which
- * does *not* implement GET should probably return HTTP_METHOD_NOT_ALLOWED.
- * Unfortunately this means that a Script GET handler can't be installed
- * by mod_actions.
- * 
+
+/* :TODO: These aren't going to work until I can figure out how to
+ *        make YARD see the ATTR_{READER,WRITER} macros. 
  */
 
 
@@ -679,12 +664,46 @@ REQUEST_STRING_ATTR_READER(request_request_method, method);
 REQUEST_INT_ATTR_READER(request_method_number, method_number);
 REQUEST_INT_ATTR_READER(request_get_allowed, allowed);
 REQUEST_INT_ATTR_WRITER(request_set_allowed, allowed);
+
+#ifdef FOR_RDOC
+/* 
+ * call-seq: 
+ *    req.allowed = int
+ * 
+ * A bitvector of the allowed methods.
+ * 
+ * A handler must ensure that the request method is one that it is
+ * capable of handling. Generally your handler should DECLINE any request
+ * methods it does not handle, and set +r.allowed+ to the list of methods 
+ * that it is willing to handle. This bitvector is used to construct the
+ * "Allow:" header required for OPTIONS requests, and 
+ * {Apache::HTTP_METHOD_NOT_ALLOWED} and {Apache::HTTP_NOT_IMPLEMENTED} status codes.
+ * 
+ * Since the +default_handler+ deals with OPTIONS, all modules can usually
+ * decline to deal with OPTIONS. TRACE is always allowed, modules don't
+ * need to set it explicitly.
+ * 
+ * Since the default_handler will always handle a GET, a module which
+ * does *not* implement GET should probably return {Apache::HTTP_METHOD_NOT_ALLOWED}.
+ * Unfortunately this means that a Script GET handler can't be installed
+ * by mod_actions.
+ * 
+ */
+static VALUE request_set_allowed( VALUE self, VALUE val )
+{
+    request_data *data = get_request_data(self);
+    data->request->allowed = NUM2INT(val);
+    return val;
+}
+#endif
+
 REQUEST_STRING_ATTR_READER(request_get_args, args);
 REQUEST_STRING_ATTR_WRITER(request_set_args, args);
 REQUEST_STRING_ATTR_READER(request_get_content_type, content_type);
-REQUEST_STRING_ATTR_READER(request_get_content_encoding, content_encoding);
 REQUEST_STRING_ATTR_READER(request_get_dispatch_handler, handler);
 REQUEST_STRING_ATTR_WRITER(request_set_dispatch_handler, handler);
+
+REQUEST_STRING_ATTR_READER(request_get_content_encoding, content_encoding);
 
 static VALUE request_request_time(VALUE self)
 {
@@ -713,6 +732,13 @@ static VALUE request_content_length(VALUE self)
     return s ? rb_cstr2inum(s, 10) : Qnil;
 }
 
+/*
+ * call-seq:
+ *    request.content_type = mimetype  -> nil
+ *
+ * Set the MIME content type of the response.
+ * @param [String] mimetype  Set the mimetype associated with the response.
+ */
 static VALUE request_set_content_type(VALUE self, VALUE str)
 {
     request_data *data;
@@ -727,27 +753,43 @@ static VALUE request_set_content_type(VALUE self, VALUE str)
 	    apr_pstrndup(data->request->pool,
 			RSTRING_PTR(str), RSTRING_LEN(str));
     }
-    return str;
+    return Qnil;
 }
 
-static VALUE request_set_content_encoding(VALUE self, VALUE str)
+/*
+ * call-seq:
+ *    request.content_encoding = encoding
+ *
+ * Set the encoding of the response body.
+ * @param [String, Encoding] encoding  the encoding of the response
+ * @example
+ *   req.content_encoding = Encoding::UTF_8
+ */
+static VALUE request_set_content_encoding(VALUE self, VALUE enc)
 {
     request_data *data;
 
     data = get_request_data(self);
-    if (NIL_P(str)) {
+    if (NIL_P(enc)) {
 	data->request->content_encoding = NULL;
     }
+#ifdef RUBY_ENCODING_H
+    else if ( rb_obj_is_instance_of(enc, rb_cEncoding) ) {
+	const char *name = rb_enc_name(rb_to_encoding(enc));
+	data->request->content_encoding =
+	    apr_pstrndup(data->request->pool, name, strlen(name));
+    }
+#endif
     else {
-	Check_Type(str, T_STRING);
+	Check_Type(enc, T_STRING);
 	data->request->content_encoding =
 	    apr_pstrndup(data->request->pool,
-			RSTRING_PTR(str),
-			RSTRING_LEN(str));
+			RSTRING_PTR(enc),
+			RSTRING_LEN(enc));
     }
-    return str;
+    return enc;
 }
- 
+
 static VALUE request_get_content_languages(VALUE self)
 {
     request_data *data;
@@ -846,7 +888,7 @@ static VALUE request_notes(VALUE self)
     return data->notes;
 }
 
-#if defined(APACHE2) && !defined(RUBY_VM)
+#ifndef RUBY_VM
 
 #ifdef WIN32
 typedef int mode_t;
@@ -913,7 +955,7 @@ static mode_t get_mode(apr_finfo_t *finfo)
 
     return mode;
 }
-#endif /* APACHE2 */
+#endif /* RUBY_VM */
 
 static VALUE request_finfo(VALUE self)
 {
@@ -930,7 +972,6 @@ static VALUE request_finfo(VALUE self)
 
 	cStat = rb_const_get(rb_cFile, rb_intern("Stat"));
 	data->finfo = Data_Make_Struct(cStat, struct stat, NULL, free, st);
-#ifdef APACHE2
 	memset(st, 0, sizeof(struct stat));
 	if (data->request->finfo.filetype != 0) {
 	    st->st_dev = data->request->finfo.device;
@@ -944,9 +985,6 @@ static VALUE request_finfo(VALUE self)
 	    st->st_mtime = apr_time_sec(data->request->finfo.mtime);
 	    st->st_ctime = apr_time_sec(data->request->finfo.ctime);
 	}
-#else /* Apache 1.x */
-	*st = data->request->finfo;
-#endif
 #endif
     }
     return data->finfo;
@@ -966,7 +1004,21 @@ static VALUE request_parsed_uri(VALUE self)
 /*
  * Arbitrary Hash of values that will be passed between handlers, and garbage-collected
  * when the request is done.
+ * 
  * @return [Hash]  the Hash of request attributes
+ * @example Pass a user object from a RubyAuthenHandler to later handlers to avoid having to look it up again.
+ * 
+ *     def authenticate( req )
+ *         username = req.user
+ *         password = req.get_basic_auth_pw
+ *         if user = User.find( username ) && user.auth( password )
+ *             req.attributes[:user] = user
+ *             return Apache::OK
+ *         else
+ *             ...
+ *         end
+ *     end
+ * 
  */
 static VALUE request_attributes(VALUE self)
 {
@@ -1109,6 +1161,10 @@ static VALUE request_eof(VALUE self)
     return INT2BOOL(data->request->remaining == 0);
 }
 
+/*
+ * @deprecated This no longer does anything at all. It used to put the input data stream
+ *    into binary mode on Win32. 
+ */
 static VALUE request_binmode(VALUE self)
 {
     return Qnil;
@@ -1201,15 +1257,9 @@ static VALUE request_remote_host(int argc, VALUE *argv, VALUE self)
     }
 
     data = get_request_data(self);
-#ifdef APACHE2
     host = ap_get_remote_host(data->request->connection,
 			      data->request->per_dir_config,
 			      lookup_val, NULL);
-#else /* Apache 1.x */
-    host = ap_get_remote_host(data->request->connection,
-			      data->request->per_dir_config,
-			      lookup_val);
-#endif
     return host ? rb_tainted_str_new2(host) : Qnil;
 }
 
@@ -1223,13 +1273,32 @@ static VALUE request_remote_logname(VALUE self)
     return logname ? rb_tainted_str_new2(logname) : Qnil;
 }
 
-static VALUE request_construct_url(VALUE self, VALUE uri)
+
+/*
+ * call-seq:
+ *   construct_url( path )  -> uristring
+ * 
+ * Make a fully-qualified URI String from the specified +path+, using the 
+ * request object's server name and port.
+ * @param [String, #to_str] path  the path to include in the URL
+ * @return [String] the new URL string
+ * @example Redirect to an advisory page on the same server if the database is down.
+ *     def handler( req )
+ *         unless @db_conn.connected?
+ *             req.server.log_error "Database down. Redirecting to the placeholder page."
+ *             req.err_headers_out['Location'] = req.construct_url('/database-down.html')
+ *             return Apache::HTTP_TEMPORARY_REDIRECT
+ *         end
+ *         ...
+ *     end
+ */
+static VALUE request_construct_url(VALUE self, VALUE path)
 {
     request_data *data;
     char *url;
 
     data = get_request_data(self);
-    url = ap_construct_url(data->request->pool, StringValuePtr(uri), data->request);
+    url = ap_construct_url(data->request->pool, StringValuePtr(path), data->request);
     return rb_tainted_str_new2(url);
 }
 
@@ -1302,30 +1371,13 @@ static VALUE request_signature(VALUE self)
 
 static VALUE request_reset_timeout(VALUE self)
 {
-#ifdef APACHE2
     rb_notimplement();
-#else /* Apache 1.x */
-    request_data *data;
-
-    data = get_request_data(self);
-    ap_reset_timeout(data->request);
-#endif
     return Qnil;
 }
 
 static VALUE request_hard_timeout(VALUE self, VALUE name)
 {
-#ifdef APACHE2
     rb_notimplement();
-#else /* Apache 1.x */
-    request_data *data;
-    char *s;
-
-    Check_Type(name, T_STRING);
-    data = get_request_data(self);
-    s = ap_pstrndup(data->request->pool, RSTRING_PTR(name), RSTRING_LEN(name));
-    ap_hard_timeout(s, data->request);
-#endif
     return Qnil;
 }
 
@@ -1458,7 +1510,6 @@ static VALUE request_log_reason(VALUE self, VALUE msg, VALUE file)
     Check_Type(msg, T_STRING);
     Check_Type(file, T_STRING);
     data = get_request_data(self);
-#ifdef APACHE2
     host = ap_get_remote_host(data->request->connection,
 			      data->request->per_dir_config,
 			      REMOTE_HOST, NULL);
@@ -1468,17 +1519,7 @@ static VALUE request_log_reason(VALUE self, VALUE msg, VALUE file)
 		 StringValuePtr(file),
 		 host,
 		 StringValuePtr(msg));
-#else /* Apache 1.x */
-    host = ap_get_remote_host(data->request->connection,
-			      data->request->per_dir_config,
-			      REMOTE_HOST);
-    ap_log_error(APLOG_MARK, APLOG_ERR | APLOG_NOERRNO,
-		 data->request->server,
-		 "access to %s failed for %s, reason: %s",
-		 StringValuePtr(file),
-		 host,
-		 StringValuePtr(msg));
-#endif
+
     return Qnil;
 }
 
@@ -1507,7 +1548,6 @@ static VALUE request_exception(VALUE self)
     return data->exception;
 }
 
-#ifdef APACHE2
 REQUEST_STRING_ATTR_READER(request_user, user);
 
 static VALUE request_set_user(VALUE self, VALUE val)
@@ -1521,23 +1561,6 @@ static VALUE request_set_user(VALUE self, VALUE val)
 				      RSTRING_LEN(val));
     return val;
 }
-#else /* Apache 1.x */
-static VALUE request_user(VALUE self)
-{
-    VALUE conn;
-
-    conn = request_connection(self);
-    return rb_funcall(conn, rb_intern("user"), 0);
-}
-
-static VALUE request_set_user(VALUE self, VALUE val)
-{
-    VALUE conn;
-
-    conn = request_connection(self);
-    return rb_funcall(conn, rb_intern("user="), 1, val);
-}
-#endif
 
 /* Should only be called from inside of response handlers */
 static VALUE request_internal_redirect(VALUE self, VALUE uri)
@@ -1585,6 +1608,11 @@ static VALUE request_is_main(VALUE self)
     }
 }
 
+/*
+ * Get the authentication type for the receiving request.
+ * @return [String] the authentication type; usually one of "Basic" 
+ *      or "Digest".
+ */
 static VALUE request_auth_type(VALUE self)
 {
     request_data *data;
@@ -1601,6 +1629,17 @@ static VALUE request_auth_type(VALUE self)
     }
 }
 
+/* 
+ * call-seq:
+ *   auth_type=( authtype )
+ * 
+ * Set the authentication type for the receiving request.
+ * @param [String] authtype  the authentication type
+ * @example Changing the authtype of a request based on where it's coming from (e.g., 
+ *          from an RubyAuthHandler)
+ * 
+ *    def 
+ */
 static VALUE request_set_auth_type(VALUE self, VALUE val)
 {
     request_data *data;
@@ -1618,12 +1657,11 @@ static VALUE request_set_auth_type(VALUE self, VALUE val)
 }
 
 /*
- * This routine returns the name of the realm in which the client must be 
- * authenticated and authorised for the request to be successfully served. 
- * The string returned is the argument to the corresponding AuthName 
- * directive.
+ * The name of the realm in which the client must be authenticated 
+ * and authorized for the request to be successfully served. This is set
+ * with the AuthName directive in the Apache config.
  * 
- * If there is no applicable realm, +nil+ is returned.
+ * @return [String] the AuthName or +nil+ if there is no applicable realm.
  *
  */
 static VALUE request_auth_name(VALUE self)
@@ -1642,6 +1680,13 @@ static VALUE request_auth_name(VALUE self)
     }
 }
 
+/*
+ * call-seq:
+ *   req.auth_name=( name )
+ * 
+ * Set the authentication realm for the request.
+ * @param [String] name  the name of the authentication realm
+ */
 static VALUE request_set_auth_name(VALUE self, VALUE val)
 {
     request_data *data;
@@ -1668,6 +1713,14 @@ static VALUE request_default_charset(VALUE self)
     return charset_name ? rb_tainted_str_new2(charset_name) : Qnil;
 }
 
+/*
+ * call-seq:
+ *    request.bytes_sent   -> int
+ *
+ * Returns the number of bytes sent by the server to the client, excluding the 
+ * HTTP headers. It is only useful after {#send_http_header} has been called.
+ *
+ */
 static VALUE request_bytes_sent(VALUE self)
 {
     request_data *data;
@@ -1678,11 +1731,6 @@ static VALUE request_bytes_sent(VALUE self)
     for (last = data->request; last->next; last = data->request->next)
         continue;
 
-#ifndef APACHE2
-    if (last->sent_bodyct && !last->bytes_sent)
-        ap_bgetopt(last->connection->client, BO_BYTECT, &last->bytes_sent);
-#endif
-
     return INT2NUM(last->bytes_sent);
 }
 
@@ -1690,15 +1738,10 @@ static VALUE request_send_fd(VALUE self, VALUE io)
 {
     rb_io_t *fptr;
     request_data *data;
-#ifdef APACHE2
     apr_size_t bytes_sent;
     apr_file_t *file;
     int fd;
     struct stat st;
-#else
-    FILE *f;
-    long bytes_sent;
-#endif
 
     request_set_sync(self, Qtrue);
     rb_apache_request_flush(self);    
@@ -1707,7 +1750,6 @@ static VALUE request_send_fd(VALUE self, VALUE io)
     Check_Type(io, T_FILE);
     GetOpenFile(io, fptr);
 
-#ifdef APACHE2
 #ifdef RUBY_VM
     fd = fptr->fd;
 #else
@@ -1720,14 +1762,6 @@ static VALUE request_send_fd(VALUE self, VALUE io)
 	rb_sys_fail(IO_PATH(fptr));
     }
     ap_send_fd(file, data->request, 0, st.st_size, &bytes_sent);
-#else
-#ifdef RUBY_VM
-    f = rb_io_stdio_file(fptr);
-#else
-    f = fptr->f;
-#endif
-    bytes_sent = ap_send_fd_length(f, data->request, -1);
-#endif
 
     return INT2NUM(bytes_sent);
 }
@@ -1737,19 +1771,11 @@ static VALUE request_proxy_q(VALUE self)
     request_data *data = get_request_data(self);
 
     switch (data->request->proxyreq) {
-#ifdef APACHE2
     case PROXYREQ_NONE:
 	return Qfalse;
     case PROXYREQ_PROXY:
     case PROXYREQ_REVERSE:
 	return Qtrue;
-#else
-    case NOT_PROXY:
-	return Qfalse;
-    case STD_PROXY:
-    case PROXY_PASS:
-	return Qtrue;
-#endif
     default:
       rb_raise(rb_eArgError, "Unknown Proxy Type");
     }
@@ -1759,16 +1785,19 @@ static VALUE request_proxy_pass_q(VALUE self)
 {
     request_data *data = get_request_data(self);
 
-#ifdef APACHE2
     if (data->request->proxyreq == PROXYREQ_REVERSE)
-#else
-    if (data->request->proxyreq == PROXY_PASS)
-#endif
       return Qtrue;
     else
       return Qfalse;
 }
 
+/*
+ * Returns +true+ if either of the 'Pragma' or 'Cache-control' headers 
+ * have already been added to the response headers, regardless of their
+ * values.
+ * 
+ * @return [boolean]  true if either of the headers are present in the response.
+ */
 static VALUE request_get_cache_resp(VALUE self)
 {
     request_data *data;
@@ -1796,6 +1825,16 @@ static VALUE request_get_cache_resp(VALUE self)
     return Qfalse;
 }
 
+/* 
+ * call-seq:
+ *   req.cache_resp=( flag )
+ * 
+ * Enable/disable cache-control headers in the response.
+ *
+ * @param [boolean] flag  If +true+, the response will have 'Pragma' and 'Cache-control' 
+ *     headers added to the response with the values set to 'no-cache'. If +false+, either of
+ *     the same headers will be removed from the response, regardless of their value.
+ */
 static VALUE request_set_cache_resp(VALUE self, VALUE arg)
 {
     request_data *data;
@@ -1825,11 +1864,7 @@ static VALUE request_lookup_uri(VALUE self, VALUE uri)
 
     Check_Type(uri, T_STRING);
     data = get_request_data(self);
-#ifdef APACHE2
     new_rec = ap_sub_req_lookup_uri(StringValuePtr(uri), data->request, NULL);
-#else
-    new_rec = ap_sub_req_lookup_uri(StringValuePtr(uri), data->request);
-#endif
     return apache_request_new(new_rec);
 }
 
@@ -1840,11 +1875,7 @@ static VALUE request_lookup_file(VALUE self, VALUE file)
 
     Check_Type(file, T_STRING);
     data = get_request_data(self);
-#ifdef APACHE2
     new_rec = ap_sub_req_lookup_file(StringValuePtr(file), data->request, NULL);
-#else
-    new_rec = ap_sub_req_lookup_file(StringValuePtr(file), data->request);
-#endif
     return apache_request_new(new_rec);
 }
 

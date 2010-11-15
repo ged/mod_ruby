@@ -39,9 +39,7 @@ VALUE rb_mApache;
 VALUE rb_eApacheError;
 VALUE rb_eApacheTimeoutError;
 VALUE rb_eApacheRequestError;
-#ifdef APACHE2
 VALUE rb_eApacheAprError;
-#endif
 
 VALUE rb_request;
 VALUE rb_apache_objrefs;
@@ -68,6 +66,22 @@ VALUE rb_apache_unregister_object(VALUE obj)
     return obj;
 }
 
+/*
+ * call-seq:
+ *    Kernel.exit( status )
+ *
+ * Terminate the current request immediately with the specified +status+.
+ * @param [Integer] status  the status code of the response that should be sent.
+ * @example If a local directory isn't readable, stop immediately and return a server error.
+ *   DATADIR = '/an/expected/directory'
+ *   
+ *   def handler( req )
+ *       exit( Apache::SERVER_ERROR ) unless
+ *           File.readable?( DATADIR ) &&  File.directory?( DATADIR )
+ *       ...
+ *   end
+ * 
+ */
 static VALUE f_exit(int argc, VALUE *argv, VALUE obj)
 {
     VALUE status;
@@ -101,35 +115,61 @@ static VALUE f_eval_string_wrap(VALUE self, VALUE str)
     return rb_eval_string_wrap(StringValuePtr(str), NULL);
 }
 
+/*
+ * Fetch the server's version as a String.
+ * 
+ * @return [String] the server's version
+ * @example
+ *    "Apache/2.2.15"
+ */
 static VALUE apache_server_version(VALUE self)
 {
     return rb_str_new2(ap_get_server_version());
 }
 
-#ifdef APACHE2 /* Apache 2.x */
+/*
+ * @deprecated This isn't possible under Apache 2, so it just raises a NotImplementedError.
+ */
 static VALUE apache_add_version_component(VALUE self, VALUE component)
 {
     rb_notimplement();
     return Qnil;
 }
-#else /* Apache 1.x */
-static VALUE apache_add_version_component(VALUE self, VALUE component)
-{
-    ap_add_version_component(StringValuePtr(component));
-    return Qnil;
-}
-#endif
 
+/*
+ * Fetch the server's build date as a String.
+ *
+ * @return [String]  the build date in the strftime format '%b %d %Y %H:%M:%S'
+ * @example
+ *     "Feb 11 2010 14:40:31"
+ */
 static VALUE apache_server_built(VALUE self)
 {
     return rb_str_new2(ap_get_server_built());
 }
 
+/*
+ * Fetch the current request object.
+ *
+ * @return [Apache::Request] the current request object
+ */
 static VALUE apache_request(VALUE self)
 {
     return rb_request;
 }
 
+/*
+ * call-seq:
+ *    Apache.unescape_url( url )
+ *
+ * Unescape any URL-escaped characters in +url+ and return the resulting string.
+ *
+ * @param [String] url   the URL string to unescape
+ * @return [String] a copy of +url+ with all url escapes replaced.
+ * @example
+ *    Apache.unescape_url("Gr%C3%BC%C3%9F%20dich!")
+ *    # => "Grüß dich!"
+ */
 static VALUE apache_unescape_url(VALUE self, VALUE url)
 {
     char *buf;
@@ -142,7 +182,6 @@ static VALUE apache_unescape_url(VALUE self, VALUE url)
     return rb_str_new2(buf);
 }
 
-#ifdef APACHE2 /* Apache 2.x */
 static void ap_chdir_file(const char *file)
 {
     const char *x;
@@ -158,20 +197,34 @@ static void ap_chdir_file(const char *file)
 	chdir(buf);
     }
 }
-#endif
 
+/*
+ * call-seq:
+ *    Apache.chdir_file( file )
+ *
+ * Change the server's current working directory to the directory part of 
+ * the specified filename.
+ * 
+ * @param [String, #to_str] file  the path to the file to to extract the directory from.
+ * @example Change the server's working directory to that of the requested file.
+ *   
+ *   Apache.chdir_file( request.filename )
+ */
 static VALUE apache_chdir_file(VALUE self, VALUE file)
 {
     ap_chdir_file(StringValuePtr(file));
     return Qnil;
 }
 
+/*
+ * Returns the path to the Apache ServerRoot.
+ * @return [String] the path to the server root
+ */
 static VALUE apache_server_root(VALUE self)
 {
     return rb_str_new2(ap_server_root);
 }
 
-#ifdef APACHE2
 void rb_apr_fail(apr_status_t status)
 {
     char buf[BUFSIZ];
@@ -186,7 +239,6 @@ static VALUE apr_error_errno(VALUE self)
 {
     return rb_iv_get(self, "errno");
 }
-#endif
 
 void rb_init_apache()
 {
@@ -394,14 +446,12 @@ void rb_init_apache()
     rb_define_const(rb_mApache, "REMOTE_DOUBLE_REV",
 		    INT2NUM(REMOTE_DOUBLE_REV));
 
-#ifdef APACHE2
     rb_define_const(rb_mApache, "AP_CONN_UNKNOWN",
 		    INT2NUM(AP_CONN_UNKNOWN));
     rb_define_const(rb_mApache, "AP_CONN_CLOSE",
 		    INT2NUM(AP_CONN_CLOSE));
     rb_define_const(rb_mApache, "AP_CONN_KEEPALIVE",
 		    INT2NUM(AP_CONN_KEEPALIVE));
-#endif
 
     rb_define_const(rb_mApache, "APLOG_EMERG",
 		    INT2NUM(APLOG_EMERG));
@@ -438,11 +488,9 @@ void rb_init_apache()
 	rb_define_class_under(rb_mApache, "TimeoutError", rb_eApacheError);
     rb_eApacheRequestError = 
 	rb_define_class_under(rb_mApache, "RequestError", rb_eApacheError);
-#ifdef APACHE2
     rb_eApacheAprError = 
 	rb_define_class_under(rb_mApache, "AprError", rb_eApacheError);
     rb_define_method(rb_eApacheAprError, "errno", apr_error_errno, 0);
-#endif
 
     rb_init_apache_array();
     rb_init_apache_table();
@@ -453,9 +501,7 @@ void rb_init_apache()
     rb_init_apache_paramtable();
     rb_init_apache_upload();
     rb_init_apache_cookie();
-#ifdef APACHE2
     rb_init_apache_bucket();
-#endif
     rb_init_apache_uri();
     rb_init_apache_error();
 }

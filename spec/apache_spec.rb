@@ -74,23 +74,29 @@ describe Apache do
 	end
 
 	# Apache::add_version_component
-	it "allows the addition of new components to the version string" do
-		pending "not implemented in Apache 2" if @apache_version >= vvec( '2.0.0' )
+	it "raises a NotImplementedError for the deprecated add_version_component method" do
 		install_handlers do
 			rubyhandler( '/', <<-END_CODE )
-				req.headers_out['Content-type'] = 'text/plain'
-				Apache.add_version_component( 'sillycomponent' )
-				req.puts( Apache.server_version )
+				req.content_type = 'text/plain'
+
+				begin
+					Apache.add_version_component( 'sillycomponent' )
+				rescue NotImplementedError
+					req.puts "Passed."
+				else
+					req.puts "Failed."
+				end
+
 				return Apache::OK
 			END_CODE
 		end
 
 		requesting( '/' ).should respond_with( HTTP_OK ).
-			and_body( /sillycomponent/ )
+			and_body( 'Passed.' )
 	end
 
 	# Apache::server_built
-	it "knows the build details of the server it's running under" do
+	it "knows the build date of the server it's running under" do
 		install_handlers do
 			rubyhandler( '/', <<-END_CODE )
 				req.headers_out['Content-type'] = 'text/plain'

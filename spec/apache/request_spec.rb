@@ -171,18 +171,21 @@ describe Apache::Request do
 	it "knows which HTTP methods are allowed for the requested URI" do
 		pending "figuring out why .allowed isn't working" do
 			handler = <<-END_CODE
-				req.allowed = 0 | (1 << Apache::M_POST)
-				req.server.log_debug( "Allowed methods mask is: %0b (%d)" % [req.allowed, req.allowed] )
-				return Apache::METHOD_NOT_ALLOWED
+				unless req.method_number == Apache::M_POST
+					req.allowed = req.allowed | (1<<Apache::M_POST)
+					req.server.log_debug "allowed bitmask is: %08b" % [ req.allowed ]
+					return Apache::DECLINED
+				end
+				return Apache::DECLINED
 			END_CODE
 
 			install_handlers do
 				rubyhandler( '/', handler )
 			end
 
-			options_for( '/' ).should respond_with( HTTP_OK ).
-				and_header( 'Allow', /TRACE/ ).
-				and_header( 'Allow', /PORN/ )
+			requesting( '/' ).should respond_with( HTTP_METHOD_NOT_ALLOWED ).
+				and_header( 'Allow', /POST/ ).
+				and_header( 'Allow', /TRACE/ )
 		end
 	end
 
@@ -209,9 +212,9 @@ describe Apache::Request do
 			req.puts "HTTP/1.0 200 Yep",
 				"Content-type: text/plain",
 				"Connection: close",
-				"X-Funky-Shit: yes",
+				"X-Funky-Stuff: yes",
 				'',
-				"Oh my god that's the funky shit!"
+				"Oh my god that's the funky s**t!"
 			return Apache::OK
 		END_CODE
 
@@ -220,32 +223,36 @@ describe Apache::Request do
 		end
 
 		requesting( '/' ).should respond_with( HTTP_OK ).
-			and_body( %{Oh my god that's the funky shit!} ).
-			and_header( 'X-Funky-Shit', 'yes' ).
+			and_body( %{Oh my god that's the funky s**t!} ).
+			and_header( 'X-Funky-Stuff', 'yes' ).
 			not_header( 'Content-length' )
 	end
 
 
 	it "can store arbitrary attributes in the request" do
-		handler = <<-END_CODE
+		fixup_handler = <<-END_CODE
 			req.attributes[:monkeyfinger] = :yes
+			return Apache::OK
+		END_CODE
+		content_handler = <<-END_CODE
 			req.puts( req.attributes.inspect )
 			req.content_type = 'text/plain'
 			return Apache::OK
 		END_CODE
 
 		install_handlers do
-			rubyhandler( '/', handler )
+			fixuphandler( '/', fixup_handler )
+			rubyhandler( '/', content_handler )
 		end
 
 		requesting( '/' ).should respond_with( HTTP_OK ).
 			and_body( /\{:monkeyfinger=>:yes\}/ )
 	end
 
-	it "can store arbitrary attributes in the request" do
+
+	it "can get and set the request's authname" do
 		handler = <<-END_CODE
 			req.auth_name += " Employees"
-			req.auth_type = "Basic"
 			req.note_auth_failure
 			return Apache::HTTP_UNAUTHORIZED
 		END_CODE
@@ -260,10 +267,264 @@ describe Apache::Request do
 		end
 
 		requesting( '/pickle_info' ).should respond_with( HTTP_UNAUTHORIZED ).
-			and_header( 'WWW-Authenticate', /pickle factory employees/i )
+			and_header( 'WWW-Authenticate', /Basic.*pickle factory employees/i )
 	end
 
 
+	it "can get the request's authtype" do
+		handler = <<-END_CODE
+			req.content_type = 'text/plain'
+			req.puts( req.auth_type )
+
+			return Apache::OK
+		END_CODE
+
+		config = <<-END_CONFIG
+			AuthType basic
+			AuthName "Sekrit Pickle Factory"
+		END_CONFIG
+
+		install_handlers do
+			rubyhandler( '/pickle_info', handler, config )
+		end
+
+		requesting( '/pickle_info' ).should respond_with( HTTP_OK ).
+			and_body( /basic/ )
+	end
+
+
+	it "can set the request's authtype" do
+		handler = <<-END_CODE
+			# Switch to basic auth from localhost so we can see the credentials. Contrived,
+			# I know. :)
+			if req.connection.remote_ip == '127.0.0.1'
+				req.auth_type = 'Basic'
+			end
+			req.note_auth_failure
+			return Apache::HTTP_UNAUTHORIZED
+		END_CODE
+
+		config = <<-END_CONFIG
+			AuthType digest
+			AuthName "Sekrit Pickle Factory"
+		END_CONFIG
+
+		install_handlers do
+			rubyhandler( '/pickle_info', handler, config )
+		end
+
+		requesting( '/pickle_info' ).should respond_with( HTTP_UNAUTHORIZED ).
+			and_header( 'WWW-Authenticate', /Basic realm="Sekrit Pickle Factory"/ )
+	end
+
+
+	it "knows how many bytes have already been sent to the client" do
+		initial_body = "the initial body: "
+
+		handler = <<-END_CODE
+			req.sync = true
+			req.content_type = 'text/plain'
+			req.print "#{initial_body}"
+			req.puts "%d bytes" % [ req.bytes_sent ]
+			return Apache::OK
+		END_CODE
+
+		install_handlers do
+			rubyhandler( '/', handler )
+		end
+
+		requesting( '/' ).should respond_with( HTTP_OK ).
+			and_body( "#{initial_body}%d bytes" % [initial_body.length] )
+	end
+
+
+	it "knows that cache-control headers are in effect if the response has a Pragma header" do
+		handler = <<-END_CODE
+			req.headers_out['Pragma'] = 'cow witches'
+			req.content_type = 'text/plain'
+
+			if req.cache_resp
+				req.puts "Yeah, I said cow witches!"
+			else
+				req.puts "Awww... I guess I'll be a werewolf."
+			end
+
+			return Apache::OK
+		END_CODE
+
+		install_handlers do
+			rubyhandler( '/', handler )
+		end
+
+		requesting( '/' ).should respond_with( HTTP_OK ).
+			and_header( 'Pragma', 'cow witches' ).
+			and_body( /cow witch/ )
+	end
+
+
+	it "knows that cache-control headers are in effect if the response has a Cache-control header" do
+		handler = <<-END_CODE
+			req.headers_out['Cache-control'] = 'no-transform'
+			req.content_type = 'text/plain'
+
+			if req.cache_resp
+				req.puts "I have fancy cache directives!"
+			else
+				req.puts "Oops, no cache directives?"
+			end
+
+			return Apache::OK
+		END_CODE
+
+		install_handlers do
+			rubyhandler( '/', handler )
+		end
+
+		requesting( '/' ).should respond_with( HTTP_OK ).
+			and_header( 'Cache-control', 'no-transform' ).
+			and_body( /fancy/ )
+	end
+
+
+	it "provides a convenience function for advising caches not to cache the response" do
+		handler = <<-END_CODE
+			req.content_type = 'text/plain'
+			req.cache_resp = true
+
+			req.puts "Something un-cacheable."
+
+			return Apache::OK
+		END_CODE
+
+		install_handlers do
+			rubyhandler( '/', handler )
+		end
+
+		requesting( '/' ).should respond_with( HTTP_OK ).
+			and_header( 'Cache-control', 'no-cache' ).
+			and_header( 'Pragma', 'no-cache' )
+	end
+
+
+	it "can also reset the cacheability of a response with the same convenience function" do
+		handler = <<-END_CODE
+			req.headers_out['Cache-control'] = 'no-tranform'
+			req.headers_out['Pragma'] = 'no-cache'
+			req.content_type = 'text/plain'
+			req.cache_resp = false
+
+			req.puts "Something that's cacheable after all."
+
+			return Apache::OK
+		END_CODE
+
+		install_handlers do
+			rubyhandler( '/', handler )
+		end
+
+		requesting( '/' ).should respond_with( HTTP_OK ).
+			without_header( 'Cache-control', 'no-cache' ).
+			without_header( 'Pragma', 'no-cache' )
+	end
+
+
+	it "can clear the output buffer" do
+		handler = <<-END_CODE
+			req.sync = false
+			req.content_type = 'text/plain'
+
+			req.puts "Something I'll probably regret later."
+			req.cancel
+			req.puts %{I mean: "You look beautiful in everything you wear."}
+
+			return Apache::OK
+		END_CODE
+
+		install_handlers do
+			rubyhandler( '/', handler )
+		end
+
+		requesting( '/' ).should respond_with( HTTP_OK ).
+			and_body( /beautiful/ ).
+			without_body( /regret/ )
+	end
+
+
+	it "can access the request's connection object" do
+		handler = <<-END_CODE
+			req.content_type = 'text/plain'
+			req.puts( req.connection.inspect )
+			return Apache::OK
+		END_CODE
+
+		install_handlers do
+			rubyhandler( '/', handler )
+		end
+
+		requesting( '/' ).should respond_with( HTTP_OK ).
+			and_body( /Apache::Connection/ )
+	end
+
+
+	it "can build URLs relative to the server and port it's running on" do
+		handler = <<-END_CODE
+			url = '/a/path/to/redirect/to'
+			req.puts( req.construct_url(url) )
+			return Apache::OK
+		END_CODE
+
+		install_handlers do
+			rubyhandler( '/', handler )
+		end
+
+		requesting( '/' ).should respond_with( HTTP_OK ).
+			and_body( "http://localhost:#{LISTEN_PORT}/a/path/to/redirect/to" )
+	end
+
+
+	it "can set the encoding of the response body to a MIME encoding string" do
+		handler = <<-END_CODE
+			req.content_encoding = 'Shift_JIS'
+			body = [82, 117, 98, 121, 130, 205, 138, 121, 130, 181, 130, 
+				162, 130, 197, 130, 183, 129, 73].pack( "C*" )
+			req.puts( body )
+			return Apache::OK
+		END_CODE
+
+		install_handlers do
+			rubyhandler( '/', handler )
+		end
+
+		expected_body = [82, 117, 98, 121, 130, 205, 138, 121, 130, 181, 130, 
+			162, 130, 197, 130, 183, 129, 73].pack( "C*" )
+		expected_body.force_encoding( 'sjis' )
+
+		requesting( '/' ).should respond_with( HTTP_OK ).
+			and_header( 'Content-encoding', 'Shift_JIS' ).
+			and_body( expected_body + "\n" )
+	end
+
+
+	it "can set the encoding of the response body to an Encoding", :if => defined?(Encoding) do
+		handler = <<-END_CODE
+			# These don't get loaded by embedded Ruby? This works in the meantime...
+			require 'enc/encdb.so'
+			require 'enc/trans/transdb.so'
+			
+			req.content_encoding = Encoding::UTF_8
+			req.puts 'Rubyは楽しいです！'.encode('utf-8')
+
+			return Apache::OK
+		END_CODE
+
+		install_handlers do
+			rubyhandler( '/', handler )
+		end
+
+		requesting( '/' ).should respond_with( HTTP_OK ).
+			and_header( 'Content-encoding', 'UTF-8' ).
+			and_body( "Rubyは楽しいです！\n" )
+	end
 
 end
 

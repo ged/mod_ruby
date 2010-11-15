@@ -14,7 +14,9 @@ There are also a few other directives to control the environment of the embedded
 
 h2. Handlers
 
-The handlers are listed in the order they're executed. 
+The handlers are listed in the order they're executed:
+
+!images/handler-order.png(Handler Order Diagram)!
 
 h3. ChildInitHandler
 
@@ -28,7 +30,9 @@ Note that the @request@ argument that's given to the handler isn't a full @Apach
 
 Here's an example of establishing a database connection for each child which will later be available to the same handler object for all of the requests it handles:
 
-bc.. #!/usr/bin/env ruby -wKU
+<notextile>
+<pre>
+#!/usr/bin/env ruby -wKU
 
 require 'pg'
 require 'singleton'
@@ -51,21 +55,28 @@ class ChildDbInitHandler
     end
 
 end
+</pre>
+</notextile>
 
-p. This will connect to the database when the child first starts, and log that it's done so. The Apache config for this will look something like:
+This will connect to the database when the child first starts, and log that it's done so. The Apache config for this will look something like:
 
-bc.. RubyRequire child_db_inithandler
-
+<notextile>
+<pre>
+RubyRequire child_db_inithandler
 RubyChildInitHandler ChildDbInitHandler.instance
 
 <Location /child_init_preconnect>
 	SetHandler ruby-object
 	RubyHandler ChildDbInitHandler.instance
 </Location>
+</pre>
+</notextile>
 
-p. When the server starts up, you'll see log messages like:
+When the server starts up, you'll see log messages like:
 
-bc. [Sat Nov 13 13:41:13 2010] [notice] Apache/2.2.15 (Unix) mod_ruby/1.3.0 Ruby/1.8.7(2009-06-12) configured -- resuming normal operations
+<notextile>
+<pre>
+[Sat Nov 13 13:41:13 2010] [notice] Apache/2.2.15 (Unix) mod_ruby/1.3.0 Ruby/1.8.7(2009-06-12) configured -- resuming normal operations
 [Sat Nov 13 13:41:13 2010] [info] Server built: Aug 24 2010 11:47:29
 [Sat Nov 13 13:41:13 2010] [debug] prefork.c(1013): AcceptMutex: posixsem (default: sysvsem)
 [Sat Nov 13 13:41:14 2010] [info] Preconnect done: #<PGconn:0x1013331d0>
@@ -73,6 +84,11 @@ bc. [Sat Nov 13 13:41:13 2010] [notice] Apache/2.2.15 (Unix) mod_ruby/1.3.0 Ruby
 [Sat Nov 13 13:41:14 2010] [info] Preconnect done: #<PGconn:0x1013331d0>
 [Sat Nov 13 13:41:14 2010] [info] Preconnect done: #<PGconn:0x1013331d0>
 [Sat Nov 13 13:41:14 2010] [info] Preconnect done: #<PGconn:0x1013331d0>
+</pre>
+</notextile>
+
+Another thing you can do with a combination of the @ChildInitHandler@ and the @CleanupHandler@ is to examine the effect on the resource consumption of the Apache child for each request:
+
 
 
 h3. PostReadRequestHandler post_read_request(#<Apache::Request:0x1020b2798>, [])
