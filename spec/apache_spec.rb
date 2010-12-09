@@ -106,7 +106,7 @@ describe Apache do
 		end
 
 		requesting( '/' ).should respond_with( HTTP_OK ).
-			and_body( /\w{3} \d{1,2} \d{4} \d+:\d\d:\d\d/ )
+			and_body( /\w{3}\s+\d{1,2} \d{4} \d+:\d\d:\d\d/ )
 	end
 
 	# Apache::request
