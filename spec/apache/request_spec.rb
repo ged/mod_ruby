@@ -482,7 +482,8 @@ describe Apache::Request do
 	end
 
 
-	it "can set the encoding of the response body to a MIME encoding string" do
+	it "can set the encoding of the response body to a MIME encoding string",
+		:if => defined?(Encoding) do
 		handler = <<-END_CODE
 			req.content_encoding = 'Shift_JIS'
 			body = [82, 117, 98, 121, 130, 205, 138, 121, 130, 181, 130, 
