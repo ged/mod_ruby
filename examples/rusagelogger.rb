@@ -23,7 +23,8 @@ class RusageLogger
 		if request.main?
 			@counter += 1
         	@initial_usage = Process.rusage
-			request.server.log_info "Initial rusage (%s): %p" % [ request.uri, @initial_usage ]
+			request.server.log_info "Initial rusage (%s): %p" %
+			 	[ request.uri, @initial_usage ]
 		end
         return Apache::DECLINED
     end
@@ -36,8 +37,11 @@ class RusageLogger
 			utime_delta = usage.utime - @initial_usage.utime
 			stime_delta = usage.stime - @initial_usage.stime
 
-			logmsg = "Usage deltas for child %d (after %d request/s): rss: %0.1fKb, utime: %0.3f, stime: %0.3f" %
-				[ Process.pid, @counter, maxrss_delta/1024.0, utime_delta, stime_delta ]
+			logmsg = "Usage deltas for child %d (after %d request/s): " %
+				[ Process.pid, @counter ]
+			logmsg << "rss: %0.1fKb, utime: %0.3f, stime: %0.3f" %
+				[ maxrss_delta/1024.0, utime_delta, stime_delta ]
+
 	        request.server.log_info( logmsg )
 		end
 

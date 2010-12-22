@@ -31,7 +31,7 @@ Note that the @request@ argument that's given to the handler isn't a full @Apach
 Here's an example of establishing a database connection for each child which will later be available to the same handler object for all of the requests it handles:
 
 <notextile>
-<pre>
+<pre class="brush:ruby">
 #!/usr/bin/env ruby -wKU
 
 require 'pg'
@@ -87,17 +87,108 @@ When the server starts up, you'll see log messages like:
 </pre>
 </notextile>
 
-Another thing you can do with a combination of the @ChildInitHandler@ and the @CleanupHandler@ is to examine the effect on the resource consumption of the Apache child for each request:
+h3. PostReadRequestHandler
+
+bc. def post_read_request( request )
+
+_[ed: only tested in the prefork model; still need to test what happens in the other MPMs]_
+
+The PostReadRequestHandler, as its name indicates, is invoked immediately after the request has been read and its headers parsed.
+
+This handler is usually used to do some task which needs to be done once per request. 
+
+An example of something you can do with a combination of the @PostReadRequestHandler@ and the @LogHandler@ (covered a little later) is to examine the effect on the resource consumption of the Apache child for each request. Resource usage statistics are gathered immediately before the request, and then compared with the amounts after the request is finished, and the results are logged.
+
+The example requires the @rusage@ gem.
+
+<notextile>
+<pre>
+#!/usr/bin/env ruby -wKU
+
+require 'singleton'
+require 'rusage'
+
+class RusageLogger
+    include Singleton
+
+	### Set up the handler's instance variables.
+	def initialize
+		@counter = 0
+		@initial_usage = nil
+	end
 
 
+	######
+	public
+	######
 
-h3. PostReadRequestHandler post_read_request(#<Apache::Request:0x1020b2798>, [])
+    ### Set the initial usage right after the request is read.
+    def post_read_request( request )
+		# Only count the main request, not subrequests
+		if request.main?
+			@counter += 1
+        	@initial_usage = Process.rusage
+		end
+        return Apache::DECLINED
+    end
 
-_To be done._
+    ### Handle content, probably using the database connection.
+    def log_transaction( request )
+		if @initial_usage
+			usage = Process.rusage
+
+			maxrss_delta = usage.maxrss - @initial_usage.maxrss
+			utime_delta  = usage.utime  - @initial_usage.utime
+			stime_delta  = usage.stime  - @initial_usage.stime
+
+			logmsg = "Usage deltas for child %d (after %d request/s): " %
+				[ Process.pid, @counter ]
+			logmsg << "rss: %0.1fKb, utime: %0.3f, stime: %0.3f" %
+				[ maxrss_delta/1024.0, utime_delta, stime_delta ]
+
+	        request.server.log_info( logmsg )
+		end
+
+        return Apache::DECLINED
+    end
+
+end
+</pre>
+</notextile>
+
+You'd add this handler to your application like so:
+
+<notextile>
+<pre>
+RubyRequire rubygems
+RubyRequire rusagelogger
+RubyPostReadRequestHandler RusageLogger.instance
+
+<Location />
+	...
+	RubyLogHandler RusageLogger.instance
+</Location>
+</pre>
+</notextile>
+
+And the output might look something like:
+
+<notextile>
+<pre>
+[Wed Dec 22 08:46:59 2010] [info] Usage deltas for child 57236 (after 1 request/s): \
+	rss: 188.0Kb, utime: 0.001, stime: 0.001
+[Wed Dec 22 08:47:27 2010] [info] Usage deltas for child 57238 (after 1 request/s): \
+	rss: 168.0Kb, utime: 0.000, stime: 0.000
+[Wed Dec 22 08:47:31 2010] [info] Usage deltas for child 57235 (after 2 request/s): \
+	rss: 12.0Kb, utime: 0.000, stime: 0.000
+[Wed Dec 22 08:47:40 2010] [info] Usage deltas for child 57236 (after 2 request/s): \
+	rss: 24.0Kb, utime: 0.000, stime: 0.000
+</pre>
+</notextile>
 
 h3. TransHandler translate_uri(#<Apache::Request:0x1020b2798>, [])
 
-_To be done._
+
 
 h3. AccessHandler check_access(#<Apache::Request:0x1020b2798>, [])
 
