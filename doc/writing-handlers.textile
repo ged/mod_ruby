@@ -14,9 +14,16 @@ There are also a few other directives to control the environment of the embedded
 
 h2. Handlers
 
-The handlers are listed in the order they're executed:
+A handler is just a Ruby object of a certain duck-type that's registered with one or more Apache hooks; each hook expects that the object registered with it provides a particular method. Since Classes are Objects, too, handler methods can be (and often are) class methods. It's also completely acceptable (and useful) to register a single object for more than one hook.
+
+Here are the hooks you can register handlers for with mod_ruby, in the order they're executed, along with the method you'll need to implement for a handler of that type:
 
 !images/handler-order.png(Handler Order Diagram)!
+
+h3. Handler Return Values
+
+_To be done._
+
 
 h3. ChildInitHandler
 
@@ -26,13 +33,18 @@ _[ed: only tested in the prefork model; still need to test what happens in the o
 
 The ChildInitHandler is a special handler that's invoked when an Apache child first starts up, once per child, which allows you to do any of the work that needs to be done before requests are able to be served. This is useful, for example, to establish connections to a database, set up any expensive data structures, or to load further dependencies.
 
-Note that the @request@ argument that's given to the handler isn't a full @Apache::Request@, as there's no actual request present, but it's populated with all of the server-global data.
+Note that the @request@ argument that's given to the handler isn't a full @Apache::Request@, as there's no actual client request present, but it's populated with all of the server-global data.
 
-Here's an example of establishing a database connection for each child which will later be available to the same handler object for all of the requests it handles:
+Here's an example of establishing a database connection for each child which will later be available to the same handler object for all of the requests it handles.
+
+This example requires the @pg@ gem, the Ruby PostgreSQL client library.
 
 <notextile>
 <pre class="brush:ruby">
 #!/usr/bin/env ruby -wKU
+#encoding: utf-8
+
+# child_db_inithandler.rb
 
 require 'pg'
 require 'singleton'
@@ -58,7 +70,13 @@ end
 </pre>
 </notextile>
 
-This will connect to the database when the child first starts, and log that it's done so. The Apache config for this will look something like:
+It provides two methods, one for the @RubyChildInitHandler@ and one for the @RubyHandler@. The latter is just so we can see the database connection object later from the browser.
+
+Since it's a @Singleton@, we can just refer to its @#instance@ to register it with the appropriate hooks.
+
+When a new Apache child starts up, it will establish a connection to the database, and log that it's done so. This will happen before any client is handed off to it, ensuring that by the time it's handling a client request, the database connection is already ready and waiting. 
+
+The Apache config for this will look something like:
 
 <notextile>
 <pre>
@@ -78,7 +96,6 @@ When the server starts up, you'll see log messages like:
 <pre>
 [Sat Nov 13 13:41:13 2010] [notice] Apache/2.2.15 (Unix) mod_ruby/1.3.0 Ruby/1.8.7(2009-06-12) configured -- resuming normal operations
 [Sat Nov 13 13:41:13 2010] [info] Server built: Aug 24 2010 11:47:29
-[Sat Nov 13 13:41:13 2010] [debug] prefork.c(1013): AcceptMutex: posixsem (default: sysvsem)
 [Sat Nov 13 13:41:14 2010] [info] Preconnect done: #<PGconn:0x1013331d0>
 [Sat Nov 13 13:41:14 2010] [info] Preconnect done: #<PGconn:0x1013331d0>
 [Sat Nov 13 13:41:14 2010] [info] Preconnect done: #<PGconn:0x1013331d0>
@@ -91,8 +108,6 @@ h3. PostReadRequestHandler
 
 bc. def post_read_request( request )
 
-_[ed: only tested in the prefork model; still need to test what happens in the other MPMs]_
-
 The PostReadRequestHandler, as its name indicates, is invoked immediately after the request has been read and its headers parsed.
 
 This handler is usually used to do some task which needs to be done once per request. 
@@ -104,6 +119,9 @@ The example requires the @rusage@ gem.
 <notextile>
 <pre>
 #!/usr/bin/env ruby -wKU
+#encoding: utf-8
+
+# rusagelogger.rb
 
 require 'singleton'
 require 'rusage'
@@ -186,31 +204,55 @@ And the output might look something like:
 </pre>
 </notextile>
 
-h3. TransHandler translate_uri(#<Apache::Request:0x1020b2798>, [])
+Note that you can wrap this around any other Apache functionality, not just other Ruby handlers. 
+
+
+h3. TransHandler
+
+bc. def translate_uri( request )
 
 
 
-h3. AccessHandler check_access(#<Apache::Request:0x1020b2798>, [])
+
+h3. AccessHandler
+
+bc. def check_access( request )
+
 
 _To be done._
 
-h3. TypeHandler find_types(#<Apache::Request:0x1020b2798>, [])
+h3. TypeHandler
+
+bc. def find_types( request )
+
 
 _To be done._
 
-h3. FixupHandler fixup(#<Apache::Request:0x1020b2798>, [])
+h3. FixupHandler
+
+bc. def fixup( request )
+
 
 _To be done._
 
-h3. RubyHandler: handler(#<Apache::Request:0x1020b2798>)
+h3. RubyHandler:
+
+bc. def handler( request )
+
 
 _To be done._
 
-h3. LogHandler log_transaction(#<Apache::Request:0x1020b2798>, [])
+h3. LogHandler
+
+bc. def log_transaction( request )
+
 
 _To be done._
 
-h3. CleanupHandler cleanup(#<Apache::Request:0x1020a77d0>, [])
+h3. CleanupHandler
+
+bc. def cleanup( request )
+
 
 _To be done._
 
