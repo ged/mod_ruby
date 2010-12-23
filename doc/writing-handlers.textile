@@ -5,9 +5,9 @@ This is a step-by-step for writing handlers in Ruby.
 
 h2. mod_ruby Handler Types
 
-Apache provides a number of hooks for customizing the way it deals with incoming requests, and mod_ruby provides Apache directives for hooking your Ruby code into many of these stages. You can hook mostly everything that the other Apache modules do, resulting in a huge amount of flexibility and control over your server.
+Apache provides a number of hooks for customizing each phase of incoming requests, and mod_ruby provides Apache directives for hooking your Ruby code into many of these stages. You can hook mostly everything that the other Apache modules do, resulting in a huge amount of flexibility and control over your server.
 
-This guide will cover each of the directives, explaining when it is called, and showing several examples of how it can be used.
+This guide will cover each of the directives, explain when it is called, and show several examples of how it can be used.
 
 There are also a few other directives to control the environment of the embedded Ruby; for documentation on those, see "Apache Directives":directives.
 
@@ -20,9 +20,41 @@ Here are the hooks you can register handlers for with mod_ruby, in the order the
 
 !images/handler-order.png(Handler Order Diagram)!
 
+h3. Stacked Handlers
+
+For each hook there can be more than one handler assigned. The hook's behavior varies when there is more then one handler registered to run for the same phase. The following table specifies each handler's behavior in this situation:
+
+||_.Directive||_.Type||
+||RubyChildInitHandler         || VOID||
+||RubyPostReadRequestHandler   || RUN_ALL||
+||RubyTransHandler             || RUN_FIRST||
+||RubyInitHandler              || RUN_ALL||
+||RubyHeaderParserHandler      || RUN_ALL||
+||RubyAccessHandler            || RUN_ALL||
+||RubyAuthenHandler            || RUN_FIRST||
+||RubyAuthzHandler             || RUN_FIRST||
+||RubyTypeHandler              || RUN_FIRST||
+||RubyFixupHandler             || RUN_ALL||
+||RubyHandler                  || RUN_FIRST||
+||RubyLogHandler               || RUN_ALL||
+||RubyCleanupHandler           || RUN_ALL||
+
+
+- @VOID@ :=
+Handlers of type @VOID@ will be all executed in the order they have been registered and their return values are ignored. =:
+- @RUN_FIRST@ :=
+@RUN_FIRST@ handlers will be executed in the order they have been registered until a handler returns something other than @Apache::DECLINED@. If the return value is @Apache::OK@ the next phase will start. In all other cases the execution will be aborted. =:
+- @RUN_ALL@ :=
+Handlers of type @RUN_ALL@ will be executed in the order they have been registered until one of them returns something other than @Apache::OK@ or @Apache::DECLINED@. =:
+
+
 h3. Handler Return Values
 
-_To be done._
+The value a handler returns indicates the disposition of the request after the handler is done with it. The specific values that can be returned depend on which hook the handler is handling.
+
+The only value that can be returned by all handlers is @Apache::OK@, which tells Apache that the handler has successfully finished its execution.
+
+HTTP handlers may also return @Apache::DONE@, which tells the server to stop the normal HTTP request cycle and fast forward to the @RubyLogHandler@, followed by @RubyCleanupHandler@. HTTP handlers may also return any HTTP numeric status code, which will also abort the request cycle and be handled as an error. Therefore you don't want to return @Apache::HTTP_OK@ from your HTTP response handler; returning @Apache::OK@ will cause Apache to set the @200 OK@ status by itself (if the rest of the request cycle also completes normally, of course).
 
 
 h3. ChildInitHandler
