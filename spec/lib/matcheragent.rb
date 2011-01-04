@@ -43,16 +43,6 @@ class Apache::SpecMatchers::MatcherAgent
 			http.start do |http|
 				trace "  connected; sending request..."
 				@response = http.request( self.request, self.body )
-
-				# Net::HTTP doesn't do anything with encoding headers 
-				# (http://redmine.ruby-lang.org/issues/show/2567), but since we
-				# control both ends, go ahead and force encoding if there's an
-				# encoding header.
-				if defined?( Encoding ) && @response.key?('Content-encoding') && @response.body
-					enc = @response['Content-encoding']
-					@response.body.force_encoding( enc )
-				end
-
 				trace "  got response: %p" % [ @response ]
 			end
 		end

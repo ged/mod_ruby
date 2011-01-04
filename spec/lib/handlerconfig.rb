@@ -41,6 +41,13 @@ class Apache::HandlerConfig
 	end
 
 
+	### Install a RubyTransHandler with the body of the
+	### #translate_uri method containing the specified +code+.
+	def transhandler( code )
+		self.handlers[ :rubytranshandler ] << [ code ]
+	end
+
+
 	### Install a RubyFixupHandler at the specified +url+ with the body of the
 	### #fixup method containing the specified +code+.
 	def fixuphandler( url, code, location_config=nil )
@@ -108,6 +115,27 @@ class Apache::HandlerConfig
 				SetHandler ruby-object
 				RubyHandler #{handlerclass}
 			</Location>
+		}.gsub( /^\t{4}/, '' )
+	end
+
+
+	### Write out the Ruby source for the specified RubyTransHandler, and return the config
+	### that points to it.
+	def write_rubytranshandler( code )
+		@handler_counter += 1
+		handlerfile = TEST_DATADIR + "rubytranshandler%d.rb" % [ @handler_counter ]
+		handlerclass = "TestRubyTransHandler%d" % [ @handler_counter ]
+
+		handler_template = self.load_handler_template( :rubytranshandler )
+
+		handlercode = handler_template.result( binding() )
+		handlerfile.open( 'w', 0644 ) do |fh|
+			fh.print( handlercode )
+		end
+
+		return %{
+			RubyRequire #{handlerfile}
+			RubyTransHandler #{handlerclass}
 		}.gsub( /^\t{4}/, '' )
 	end
 

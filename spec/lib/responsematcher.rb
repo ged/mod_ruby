@@ -251,8 +251,6 @@ class Apache::SpecMatchers::ResponseMatcher
 			buf << "#{k}: #{v}\n"
 		end
 		buf << "\n"
-		buf << response.body.encode( 'utf-8' ) if
-			response.class.body_permitted? && response.body
 
 		return buf
 	end

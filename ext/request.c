@@ -700,8 +700,42 @@ static VALUE request_set_allowed( VALUE self, VALUE val )
 REQUEST_STRING_ATTR_READER(request_get_args, args);
 REQUEST_STRING_ATTR_WRITER(request_set_args, args);
 REQUEST_STRING_ATTR_READER(request_get_content_type, content_type);
+
+/* 
+ * call-seq: 
+ *    req.dispatch_handler	-> string
+ * 
+ * Get the name of the dispatch handler for the current request. For mod_ruby
+ * handlers, for example, this will be 'ruby-object'.
+ * 
+ */
 REQUEST_STRING_ATTR_READER(request_get_dispatch_handler, handler);
+
+/* 
+ * call-seq: 
+ *    req.dispatch_handler = handler
+ * 
+ * Set a handler for the request. The +handler+ is the name of a handler 
+ * like the ones used in the SetHandler directive (e.g., 'None', 
+ * 'imap-file', 'cgi-script', etc.)
+ * 
+ */
 REQUEST_STRING_ATTR_WRITER(request_set_dispatch_handler, handler);
+
+/*
+ * call-seq:
+ *    req.content_encoding   -> string
+ *
+ * Return any additional content codings that have been applied to the 
+ * entity-body, and thus what decoding mechanisms must be applied in order 
+ * to obtain the media-type referenced by the Content-Type header field. 
+ * The encoding is primarily used to allow a document to be compressed 
+ * without losing the identity of its underlying media type.
+ *
+ *    if req.content_encoding == 'gzip'
+ *       # decompress the entity body
+ *    end
+ */
 
 REQUEST_STRING_ATTR_READER(request_get_content_encoding, content_encoding);
 
@@ -760,34 +794,30 @@ static VALUE request_set_content_type(VALUE self, VALUE str)
  * call-seq:
  *    request.content_encoding = encoding
  *
- * Set the encoding of the response body.
- * @param [String, Encoding] encoding  the encoding of the response
- * @example
- *   req.content_encoding = Encoding::UTF_8
+ * Set the content-encoding of the response body. Note that this is
+ * *not* the same as the character set of the response -- that should
+ * be set as part of the Content-Type header ({#content_type}).
+ * 
+ * @param [String] encoding  the content-encoding of the response body
+ * @example Indicate that the response body is compressed.
+ *   req.content_encoding = 'gzip'
  */
-static VALUE request_set_content_encoding(VALUE self, VALUE enc)
+static VALUE request_set_content_encoding(VALUE self, VALUE str)
 {
     request_data *data;
 
     data = get_request_data(self);
-    if (NIL_P(enc)) {
+    if (NIL_P(str)) {
 	data->request->content_encoding = NULL;
     }
-#ifdef RUBY_ENCODING_H
-    else if ( rb_obj_is_instance_of(enc, rb_cEncoding) ) {
-	const char *name = rb_enc_name(rb_to_encoding(enc));
-	data->request->content_encoding =
-	    apr_pstrndup(data->request->pool, name, strlen(name));
-    }
-#endif
     else {
-	Check_Type(enc, T_STRING);
+	Check_Type(str, T_STRING);
 	data->request->content_encoding =
 	    apr_pstrndup(data->request->pool,
-			RSTRING_PTR(enc),
-			RSTRING_LEN(enc));
+			RSTRING_PTR(str),
+			RSTRING_LEN(str));
     }
-    return enc;
+    return str;
 }
 
 static VALUE request_get_content_languages(VALUE self)

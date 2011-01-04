@@ -482,13 +482,12 @@ describe Apache::Request do
 	end
 
 
-	it "can set the encoding of the response body to a MIME encoding string",
-		:if => defined?(Encoding) do
+	it "can set the Content-Encoding header of the response body" do
 		handler = <<-END_CODE
-			req.content_encoding = 'Shift_JIS'
-			body = [82, 117, 98, 121, 130, 205, 138, 121, 130, 181, 130, 
-				162, 130, 197, 130, 183, 129, 73].pack( "C*" )
-			req.puts( body )
+			require 'zlib'
+			body = "Some content that needs compression..."
+			req.content_encoding = 'gzip'
+			req.puts( Zlib::Deflate.deflate(body) )
 			return Apache::OK
 		END_CODE
 
@@ -496,25 +495,15 @@ describe Apache::Request do
 			rubyhandler( '/', handler )
 		end
 
-		expected_body = [82, 117, 98, 121, 130, 205, 138, 121, 130, 181, 130, 
-			162, 130, 197, 130, 183, 129, 73].pack( "C*" )
-		expected_body.force_encoding( 'sjis' )
-
 		requesting( '/' ).should respond_with( HTTP_OK ).
-			and_header( 'Content-encoding', 'Shift_JIS' ).
-			and_body( expected_body + "\n" )
+			and_header( 'Content-encoding', 'gzip' )
 	end
 
 
-	it "can set the encoding of the response body to an Encoding", :if => defined?(Encoding) do
+	it "can get the name of the dispatch handler" do
 		handler = <<-END_CODE
-			# These don't get loaded by embedded Ruby? This works in the meantime...
-			require 'enc/encdb.so'
-			require 'enc/trans/transdb.so'
-			
-			req.content_encoding = Encoding::UTF_8
-			req.puts 'Rubyは楽しいです！'.encode('utf-8')
-
+			req.content_type = 'text/plain'
+			req.puts( req.dispatch_handler )
 			return Apache::OK
 		END_CODE
 
@@ -523,8 +512,43 @@ describe Apache::Request do
 		end
 
 		requesting( '/' ).should respond_with( HTTP_OK ).
-			and_header( 'Content-encoding', 'UTF-8' ).
-			and_body( "Rubyは楽しいです！\n" )
+			and_body( /ruby-object/ )
+	end
+
+
+	it "can reset the dispatch handler" do
+		fixuphandler_code = <<-END_TRANS_HANDLER
+			req.dispatch_handler = 'None'
+			return Apache::OK
+		END_TRANS_HANDLER
+		handler_code = <<-END_CODE
+			req.content_type = 'text/plain'
+			req.server.log_debug( "In the Ruby handler!" )
+			return Apache::OK
+		END_CODE
+
+		install_handlers do
+			fixuphandler( '/', fixuphandler_code )
+			rubyhandler( '/', handler_code )
+		end
+
+		requesting( '/' ).should respond_with( HTTP_NOT_FOUND )
+	end
+
+
+	it "knows what the request's entity body's content-encoding is" do
+		handler_code = <<-END_CODE
+			req.content_type = 'text/plain'
+			req.puts( req.content_encoding.inspect )
+			return Apache::OK
+		END_CODE
+
+		install_handlers do
+			rubyhandler( '/', handler_code )
+		end
+
+		requesting( '/', 'Content-encoding' => 'identity' ).should respond_with( HTTP_OK ).
+			and_body( /nil/ )
 	end
 
 end

@@ -7,7 +7,7 @@ ServerRoot <%= BASEDIR %>
 Listen 127.0.0.1:<%= LISTEN_PORT %>
 AcceptMutex posixsem
 ServerName localhost
-DocumentRoot /tmp
+DocumentRoot <%= TEST_DATADIR %>
 
 KeepAlive off
 MaxClients 5
@@ -19,6 +19,7 @@ LoadModule ruby_module ext/mod_ruby.so
 # path to the module directory.
 # LoadModule status_module <%= apxs_vars[:LIBEXECDIR] %>/mod_status.so
 LoadModule log_config_module <%= apxs_vars[:LIBEXECDIR] %>/mod_log_config.so
+LoadModule dir_module <%= apxs_vars[:LIBEXECDIR] %>/mod_dir.so
 LogFormat "%h %l %u %t \"%r\" %>s %b \"%{Referer}i\" \"%{User-Agent}i\"" combined
 CustomLog <%= TEST_DATADIR + 'access.log' %> combined
 
@@ -26,6 +27,8 @@ LogLevel debug
 
 ErrorLog <%= ERRORLOG %>
 PidFile <%= PIDFILE %>
+
+DirectoryIndex index.html
 
 RubyAddPath <%= LIBDIR %>
 RubyAddPath <%= EXTDIR %>

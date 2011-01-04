@@ -5,6 +5,7 @@ require 'pathname'
 require 'singleton'
 require 'open-uri'
 require 'logger'
+require 'fileutils'
 
 require 'spec/lib/constants'
 
@@ -293,6 +294,7 @@ module Apache
 				ofh.print( output )
 			end
 			CONFIG_INCLUDE_FILE.open( 'w', 0644 ) {  } # touch the includefile
+			FileUtils.cp( SPEC_DATADIR + 'index.html', TEST_DATADIR )
 
 			# Start the server
 			apache_cmd( 'start' )
@@ -394,8 +396,19 @@ module Apache
 				log.seek( 0, IO::SEEK_END )
 				yield
 				Thread.current[ 'logger-output' ] << log.readlines.
+					collect {|line| escape_html(line) }.
 					collect {|line| line.sub(/\n/, '<br />')}
 			end
+		end
+
+
+		### Return a copy of +string+ with HTML escaped.
+		def escape_html( string )
+			return string.
+				gsub( /&/n, '&amp;' ).
+				gsub( /\"/n, '&quot;' ).
+				gsub( />/n, '&gt;' ).
+				gsub( /</n, '&lt;' )
 		end
 
 	end # module SpecHelpers
